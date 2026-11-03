@@ -105,7 +105,7 @@ export const Leaderboard3DPodium: React.FC<Leaderboard3DPodiumProps> = ({
     const height = 340;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0f172a');
+    scene.background = new THREE.Color('#243b55');
 
     const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
     camera.position.set(0, 3.6, 8.2);
@@ -230,12 +230,12 @@ export const Leaderboard3DPodium: React.FC<Leaderboard3DPodiumProps> = ({
             <h2 className="text-2xl font-bold mt-1">
               Podium 3D Juara Kompetensi Hematologi ATLM
             </h2>
-            <p className="text-sm text-slate-300 mt-1">
-              Peringkat otomatis berbasis skor total tertinggi, akurasi jawaban 30 soal klinis & teori, serta kecepatan analisis.
+            <p className="text-sm text-slate-200 mt-1">
+              Peringkat otomatis berbasis skor total tertinggi, akurasi jawaban 50 soal pilihan ganda (A–E) ATLM, serta kecepatan analisis.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono bg-slate-800/90 px-3.5 py-2 rounded-xl border border-slate-700">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center gap-2 text-xs font-mono bg-[#314d6d] px-3.5 py-2 rounded-xl border border-[#4a6c94]">
+            <ShieldCheck className="w-4 h-4 text-emerald-300" />
             <span>
               {isLecturerView
                 ? 'Mode Dosen: NPM Lengkap Ditampilkan'
@@ -247,15 +247,15 @@ export const Leaderboard3DPodium: React.FC<Leaderboard3DPodiumProps> = ({
         {/* 3D Podium Canvas */}
         <div
           ref={mountRef}
-          className="w-full h-[340px] mt-5 rounded-xl overflow-hidden border border-slate-800"
+          className="w-full h-[340px] mt-5 rounded-xl overflow-hidden border border-[#3a5778]"
         />
 
         {/* Top 3 Champion Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
           {[
-            { data: rank2, title: 'JUARA 2 — SILVER TROPHY', accent: 'border-slate-400/50 bg-slate-800/60', medal: '🥈 #2' },
-            { data: rank1, title: 'JUARA 1 — GOLD CHAMPION', accent: 'border-amber-400/70 bg-amber-500/10', medal: '🥇 #1' },
-            { data: rank3, title: 'JUARA 3 — BRONZE TROPHY', accent: 'border-amber-700/60 bg-slate-800/60', medal: '🥉 #3' },
+            { data: rank2, title: 'JUARA 2 — SILVER TROPHY', accent: 'border-slate-300/40 bg-[#2e4866]', medal: '🥈 #2' },
+            { data: rank1, title: 'JUARA 1 — GOLD CHAMPION', accent: 'border-amber-300/70 bg-amber-400/15', medal: '🥇 #1' },
+            { data: rank3, title: 'JUARA 3 — BRONZE TROPHY', accent: 'border-amber-500/50 bg-[#2e4866]', medal: '🥉 #3' },
           ].map((slot, i) =>
             slot.data ? (
               <div
@@ -270,18 +270,18 @@ export const Leaderboard3DPodium: React.FC<Leaderboard3DPodiumProps> = ({
                     <span className="text-lg font-bold">{slot.medal}</span>
                   </div>
                   <h3 className="text-lg font-bold text-white mt-1">{slot.data.fullName}</h3>
-                  <p className="text-xs text-slate-300 font-mono">
+                  <p className="text-xs text-slate-200 font-mono">
                     NPM: {slot.data.npm} • {slot.data.className}
                   </p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-700/70 flex items-center justify-between text-xs">
+                <div className="mt-3 pt-3 border-t border-white/15 flex items-center justify-between text-xs">
                   <span className="font-mono font-bold text-sky-300 text-sm">
                     {slot.data.score} Poin
                   </span>
                   <span className="text-emerald-300 font-mono">
-                    {slot.data.correctCount}/30 ({slot.data.accuracyPercent}%)
+                    {slot.data.correctCount}/50 ({slot.data.accuracyPercent}%)
                   </span>
-                  <span className="text-slate-300 font-mono">
+                  <span className="text-slate-200 font-mono">
                     {formatDuration(slot.data.durationSec)}
                   </span>
                 </div>
@@ -293,20 +293,20 @@ export const Leaderboard3DPodium: React.FC<Leaderboard3DPodiumProps> = ({
 
       {/* Complete Ranking Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-slate-900">
               Tabel Peringkat Kelas & Penghargaan Kategori
             </h3>
-            <p className="text-xs text-slate-500">
-              Data terintegrasi secara real-time dari hasil penyelesaian 30 soal kuis hematologi.
+            <p className="text-xs text-slate-600">
+              Data terintegrasi secara real-time dari hasil penyelesaian 50 soal kuis hematologi ATLM.
             </p>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="bg-slate-50 text-slate-600 text-xs font-mono uppercase border-b border-slate-200">
+              <tr className="bg-slate-50 text-slate-700 text-xs font-mono uppercase border-b border-slate-200">
                 <th className="py-3.5 px-4">Peringkat</th>
                 <th className="py-3.5 px-4">Mahasiswa ATLM</th>
                 <th className="py-3.5 px-4">NPM</th>
@@ -317,7 +317,7 @@ export const Leaderboard3DPodium: React.FC<Leaderboard3DPodiumProps> = ({
                 <th className="py-3.5 px-4">Penghargaan Kategori</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {entries.map((entry) => (
                 <tr key={entry.id} className="hover:bg-slate-50/80 transition">
                   <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
@@ -326,13 +326,13 @@ export const Leaderboard3DPodium: React.FC<Leaderboard3DPodiumProps> = ({
                   <td className="py-3.5 px-4 font-semibold text-slate-900">
                     {entry.fullName}
                   </td>
-                  <td className="py-3.5 px-4 font-mono text-slate-600">{entry.npm}</td>
-                  <td className="py-3.5 px-4 text-slate-600">{entry.className}</td>
+                  <td className="py-3.5 px-4 font-mono text-slate-700">{entry.npm}</td>
+                  <td className="py-3.5 px-4 text-slate-700">{entry.className}</td>
                   <td className="py-3.5 px-4 font-mono font-bold text-sky-700">
                     {entry.score}
                   </td>
                   <td className="py-3.5 px-4 font-mono text-emerald-700">
-                    {entry.correctCount}/30 ({entry.accuracyPercent}%)
+                    {entry.correctCount}/50 ({entry.accuracyPercent}%)
                   </td>
                   <td className="py-3.5 px-4 font-mono text-slate-600">
                     <span className="inline-flex items-center gap-1">

@@ -38,7 +38,7 @@ export const LECTURER_MENUS = [
   { id: 'access_codes', label: '3. Pengaturan Kode Akses', icon: KeyRound },
   { id: 'lifetime_history', label: '4. Riwayat Aktivasi Mahasiswa', icon: ShieldCheck },
   { id: 'class_mgmt', label: '5. Manajemen Kelas', icon: GraduationCap },
-  { id: 'question_bank', label: '6. Bank Soal (30 ABCD)', icon: FileQuestion },
+  { id: 'question_bank', label: '6. Bank Soal (50 A–E)', icon: FileQuestion },
   { id: 'quiz_control', label: '7. Kuis & Sesi Live', icon: PlayCircle },
   { id: 'quiz_results', label: '8. Hasil Kuis', icon: ClipboardList },
   { id: 'explanations', label: '9. Pembahasan Rinci', icon: BookOpenCheck },
@@ -102,21 +102,29 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
     leaderboard: LeaderboardEntry[];
     questionStats: Array<{
       questionNumber: number;
+      sectionCode: 'A' | 'B' | 'C' | 'D';
       topic: string;
       category: string;
-      correctOption: 'A' | 'B' | 'C' | 'D';
+      caseTable?: {
+        anamnesis: string;
+        physicalExam: string;
+        doctorOrder: string;
+        labResults: string;
+        medicationContext: string;
+      } | null;
+      correctOption: 'A' | 'B' | 'C' | 'D' | 'E';
       totalAttempts: number;
       correctCount: number;
       accuracyPercent: number;
       pdfPageRef: string;
       questionText: string;
-      options: { A: string; B: string; C: string; D: string };
+      options: { A: string; B: string; C: string; D: string; E: string };
       scientificExplanation: string;
-      optionRationales: { A: string; B: string; C: string; D: string };
-      calculationSteps: string | null;
+      atlmProcedureAndDecision: string;
       doctorClinicalExplanation: string;
       patientEducation: string;
-      managementPlan: string;
+      whyOthersWrong: string;
+      calculationSteps: string | null;
     }>;
   } | null>(null);
 
@@ -262,7 +270,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       'Nama Mahasiswa',
       'Kelas',
       'Skor Total',
-      'Jumlah Benar (dari 30)',
+      'Jumlah Benar (dari 50)',
       'Akurasi (%)',
       'Durasi (Detik)',
       'Kategori Penghargaan',
@@ -291,21 +299,21 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-[#dde5ef] flex flex-col lg:flex-row">
       {/* Left Sidebar (15 Lecturer Menus) */}
-      <aside className="w-full lg:w-72 bg-slate-900 text-white shrink-0 border-r border-slate-800 no-print">
-        <div className="p-5 border-b border-slate-800 flex items-center gap-3">
+      <aside className="w-full lg:w-72 bg-[#233852] text-white shrink-0 border-r border-[#355172] no-print">
+        <div className="p-5 border-b border-[#355172] flex items-center gap-3">
           <img
             src="/assets/ikes_rajawali_logo.png"
             alt="Logo IKES Rajawali"
             className="w-11 h-11 rounded-full bg-white p-0.5 object-contain shrink-0"
           />
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-wider text-sky-400">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-sky-300">
               PORTAL DOSEN PENGAMPU
             </p>
             <h2 className="text-sm font-bold leading-snug">{lecturerName}</h2>
-            <p className="text-[11px] text-slate-400">IKES Rajawali Bandung</p>
+            <p className="text-[11px] text-slate-300">IKES Rajawali Bandung</p>
           </div>
         </div>
 
@@ -323,8 +331,8 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                 }}
                 className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2.5 transition ${
                   active
-                    ? 'bg-sky-600 text-white font-semibold shadow'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                    : 'text-slate-200 hover:bg-[#2f4969] hover:text-white'
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" />
@@ -333,10 +341,10 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
             );
           })}
 
-          <div className="pt-3 mt-3 border-t border-slate-800">
+          <div className="pt-3 mt-3 border-t border-[#355172]">
             <button
               onClick={onLogout}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white text-xs font-semibold transition"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white text-xs font-semibold transition"
             >
               Keluar dari Mode Dosen
             </button>
@@ -347,7 +355,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       {/* Main Content Area */}
       <main className="flex-1 p-5 md:p-8 overflow-y-auto space-y-6">
         {/* Top Academic Institution Header */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-[#edf2f7] rounded-2xl border border-slate-300 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <img
               src="/assets/ikes_rajawali_logo.png"
@@ -405,19 +413,19 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                     </p>
                     <p className="text-[11px] text-emerald-600 mt-1">Akses Permanen Terikat NPM</p>
                   </div>
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                    <p className="text-xs font-mono uppercase text-slate-500">Total Percobaan Kuis</p>
+                  <div className="bg-[#edf2f7] p-5 rounded-2xl border border-slate-300 shadow-sm">
+                    <p className="text-xs font-mono uppercase text-slate-600">Total Percobaan Kuis</p>
                     <p className="text-3xl font-mono font-bold text-sky-700 mt-1">
                       {dashData.metrics.totalQuizAttempts}
                     </p>
-                    <p className="text-[11px] text-slate-500 mt-1">30 Soal ABCD Tersimpan</p>
+                    <p className="text-[11px] text-slate-600 mt-1">50 Soal Pilihan Ganda (A–E)</p>
                   </div>
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                    <p className="text-xs font-mono uppercase text-slate-500">Rata-rata Akurasi</p>
+                  <div className="bg-[#edf2f7] p-5 rounded-2xl border border-slate-300 shadow-sm">
+                    <p className="text-xs font-mono uppercase text-slate-600">Rata-rata Akurasi</p>
                     <p className="text-3xl font-mono font-bold text-emerald-700 mt-1">
                       {dashData.metrics.averageAccuracyPercent}%
                     </p>
-                    <p className="text-[11px] text-slate-500 mt-1">20 Kasus Klinis + 10 Teori</p>
+                    <p className="text-[11px] text-slate-600 mt-1">Bagian A, B, C & D (ATLM)</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <p className="text-xs font-mono uppercase text-slate-500">Skor Tertinggi</p>
@@ -429,11 +437,11 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                     </p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                    <p className="text-xs font-mono uppercase text-slate-500">Versi Kode Akses</p>
+                    <p className="text-xs font-mono uppercase text-slate-500">Kode Aktivasi Dosen</p>
                     <p className="text-3xl font-mono font-bold text-indigo-700 mt-1">
-                      V{dashData.metrics.activeAccessCodeVersion}
+                      040186
                     </p>
-                    <p className="text-[11px] text-slate-500 mt-1">Kode Awal Default: 121201</p>
+                    <p className="text-[11px] text-slate-500 mt-1">Versi Aktif: V{dashData.metrics.activeAccessCodeVersion}</p>
                   </div>
                 </div>
 
@@ -682,58 +690,89 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
               activeMenu === 'explanations' ||
               activeMenu === 'analytics') && (
               <div className="space-y-4">
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div className="bg-[#edf2f7] rounded-2xl border border-slate-300 p-5 shadow-sm">
                   <h3 className="text-lg font-bold text-slate-900">
-                    Bank Soal 30 ABCD, Kunci Jawaban, Pembahasan & Statistik Akurasi Kelas
+                    Bank Soal 50 Pilihan Ganda (A–E) ATLM, Kunci Jawaban, Pembahasan & Statistik Akurasi Kelas
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    Menampilkan 20 Soal Kasus Klinis Sangat Sulit (Nomor 1–20) dan 10 Soal Teori
-                    Sangat Sulit (Nomor 21–30).
+                  <p className="text-xs text-slate-600 mt-1">
+                    Menampilkan 10 Soal Teori Dasar (Bagian A), 15 Soal Gabungan CBC/Apusan/QC (Bagian B), 20 Soal Kasus Sangat Sulit lengkap Tabel Klinis (Bagian C), dan 5 Soal Hitungan MCV/MCH/MCHC (Bagian D).
                   </p>
                 </div>
 
                 {dashData.questionStats.map((q) => (
                   <div
                     key={q.questionNumber}
-                    className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3"
+                    className="bg-[#edf2f7] rounded-2xl border border-slate-300 p-5 shadow-sm space-y-3.5"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-300">
                       <span className="font-mono font-bold text-sm text-slate-900">
-                        SOAL #{q.questionNumber} — {q.topic}
+                        SOAL #{String(q.questionNumber).padStart(2, '0')} [BAGIAN {q.sectionCode}] — {q.topic}
                       </span>
                       <div className="flex items-center gap-2 text-xs font-mono">
-                        <span className="px-2.5 py-1 rounded bg-emerald-100 text-emerald-800 font-bold">
+                        <span className="px-2.5 py-1 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
                           Kunci: Opsi {q.correctOption}
                         </span>
-                        <span className="px-2.5 py-1 rounded bg-sky-100 text-sky-800 font-bold">
+                        <span className="px-2.5 py-1 rounded bg-sky-100 text-sky-800 font-bold border border-sky-300">
                           Akurasi Kelas: {q.accuracyPercent}%
                         </span>
-                        <span className="text-slate-500">PDF {q.pdfPageRef}</span>
+                        <span className="text-slate-600">{q.pdfPageRef}</span>
                       </div>
                     </div>
-                    <p className="text-sm text-slate-900 font-medium">{q.questionText}</p>
+
+                    {q.caseTable && (
+                      <div className="rounded-xl bg-[#e2e8f0] border border-slate-300 p-3.5 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-800">
+                        <div>
+                          <p className="font-mono font-bold text-sky-900 uppercase">Anamnesis & Fisik:</p>
+                          <p className="mt-0.5">{q.caseTable.anamnesis}</p>
+                          <p className="mt-1">{q.caseTable.physicalExam}</p>
+                          <p className="mt-1 font-medium">Permintaan Dokter: {q.caseTable.doctorOrder}</p>
+                        </div>
+                        <div>
+                          <p className="font-mono font-bold text-rose-900 uppercase">Hasil Pemeriksaan Lab:</p>
+                          <p className="mt-0.5 font-mono">{q.caseTable.labResults}</p>
+                          <p className="mt-1"><strong>Konteks Obat/Edukasi:</strong> {q.caseTable.medicationContext}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-sm text-slate-900 font-semibold">{q.questionText}</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      {(['A', 'B', 'C', 'D'] as const).map((k) => (
+                      {(['A', 'B', 'C', 'D', 'E'] as const).map((k) => (
                         <div
                           key={k}
                           className={`p-2.5 rounded-lg border ${
+                            k === 'E' ? 'md:col-span-2' : ''
+                          } ${
                             k === q.correctOption
-                              ? 'bg-emerald-50 border-emerald-300 font-semibold text-emerald-950'
-                              : 'bg-slate-50 border-slate-200 text-slate-600'
+                              ? 'bg-emerald-100/90 border-emerald-400 font-semibold text-emerald-950'
+                              : 'bg-[#e6edf5] border-slate-300 text-slate-700'
                           }`}
                         >
                           <span className="font-mono font-bold">{k}.</span> {q.options[k]}
-                          <p className="mt-1 text-[11px] opacity-85">{q.optionRationales[k]}</p>
                         </div>
                       ))}
                     </div>
                     {q.calculationSteps && (
-                      <div className="p-3 rounded-lg bg-slate-900 text-sky-300 font-mono text-xs">
+                      <div className="p-3 rounded-lg bg-[#243b55] text-sky-200 font-mono text-xs">
                         {q.calculationSteps}
                       </div>
                     )}
-                    <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <strong>Pembahasan Ilmiah:</strong> {q.scientificExplanation}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+                      <div className="p-3 rounded-lg bg-[#e2e8f0] border border-slate-300 text-slate-800">
+                        <strong>1. Dasar Penalaran Lab:</strong> {q.scientificExplanation}
+                      </div>
+                      <div className="p-3 rounded-lg bg-[#e2e8f0] border border-slate-300 text-slate-800">
+                        <strong>2. Prosedur & Keputusan ATLM:</strong> {q.atlmProcedureAndDecision}
+                      </div>
+                      <div className="p-3 rounded-lg bg-[#e2e8f0] border border-slate-300 text-slate-800">
+                        <strong>3. Hubungan Terapi Dokter:</strong> {q.doctorClinicalExplanation}
+                      </div>
+                      <div className="p-3 rounded-lg bg-[#e2e8f0] border border-slate-300 text-slate-800">
+                        <strong>4. Edukasi & Komunikasi:</strong> {q.patientEducation}
+                      </div>
+                    </div>
+                    <p className="text-xs text-amber-950 bg-amber-100/70 p-3 rounded-lg border border-amber-300">
+                      <strong>5. Mengapa Pilihan Lain Keliru:</strong> {q.whyOthersWrong}
                     </p>
                   </div>
                 ))}
@@ -742,24 +781,23 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
 
             {/* MENU 7: QUIZ & LIVE SESSION CONTROL */}
             {activeMenu === 'quiz_control' && (
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="bg-[#edf2f7] rounded-2xl border border-slate-300 p-6 shadow-sm space-y-4">
                 <h3 className="text-lg font-bold text-slate-900">
-                  Kontrol Sesi Kuis Interaktif (Solo & Live Quiz Bersama Dosen)
+                  Kontrol Sesi Kuis Interaktif (Solo & Live Quiz Bersama Dosen — 50 Soal A–E)
                 </h3>
-                <div className="p-5 rounded-2xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-4">
+                <div className="p-5 rounded-2xl bg-[#243b55] text-white flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <p className="text-xs font-mono uppercase text-sky-400">
+                    <p className="text-xs font-mono uppercase text-sky-300">
                       KODE SESI LIVE QUIZ KELAS AKTIF
                     </p>
                     <p className="text-3xl font-mono font-bold tracking-wider mt-1">
-                      ATLM-HEMATO-30
+                      ATLM-HEMATO-50
                     </p>
-                    <p className="text-xs text-slate-300 mt-1">
-                      Bagikan kode sesi ini kepada mahasiswa untuk memulai Live Quiz 30 Soal secara
-                      serentak.
+                    <p className="text-xs text-slate-200 mt-1">
+                      Bagikan kode sesi ini kepada mahasiswa ATLM untuk memulai Live Quiz 50 Soal secara serentak.
                     </p>
                   </div>
-                  <div className="text-right font-mono text-xs text-emerald-400">
+                  <div className="text-right font-mono text-xs text-emerald-300">
                     STATUS: AKTIF • 60 DETIK / SOAL
                   </div>
                 </div>
@@ -949,7 +987,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                         <td className="py-2.5 px-3 font-semibold">{r.fullName}</td>
                         <td className="py-2.5 px-3">{r.className}</td>
                         <td className="py-2.5 px-3 font-mono font-bold">{r.score}</td>
-                        <td className="py-2.5 px-3 font-mono">{r.correctCount}/30</td>
+                        <td className="py-2.5 px-3 font-mono">{r.correctCount}/50</td>
                         <td className="py-2.5 px-3 font-mono font-bold">{r.accuracyPercent}%</td>
                       </tr>
                     ))}
@@ -965,8 +1003,8 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                   Pengaturan Kredensial Pribadi Dosen Pengampu
                 </h3>
                 <p className="text-xs text-slate-600">
-                  Anda dapat memperbarui username dan password pribadi Dosen kapan saja. Kode akses
-                  bootstrap awal (<code className="font-mono">121201</code>) juga tetap didukung di
+                  Anda dapat memperbarui username dan password pribadi Dosen kapan saja. Kode
+                  aktivasi dosen (<code className="font-mono font-bold">040186</code>) selalu aktif di
                   server.
                 </p>
                 <form onSubmit={handleSaveCredentials} className="space-y-4 text-xs">

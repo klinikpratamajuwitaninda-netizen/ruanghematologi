@@ -12,6 +12,18 @@ export interface LabEquipmentItem {
   pdfPageRef: number;
 }
 
+export interface PatientClinicalCardData {
+  rmNumber: string;
+  ageGender: string;
+  bedOrStation: string;
+  diagnosisSummary: string;
+  anamnesis: string;
+  physicalExam: string;
+  cbcAndIndices: string;
+  smearMorphology: string;
+  atlmDecisionAndTherapy: string;
+}
+
 export interface NpcCharacterData {
   id: string;
   name: string;
@@ -22,6 +34,8 @@ export interface NpcCharacterData {
   coatColor: string;
   scrubColor: string;
   hairColor: string;
+  patientStationType?: 'bed' | 'chair';
+  patientClinicalCard?: PatientClinicalCardData;
   dialogues: {
     id: string;
     en: string;
@@ -421,24 +435,241 @@ export const HOSPITAL_NPCS: NpcCharacterData[] = [
   },
   {
     id: 'npc_patient_nadia',
-    name: 'Nadia Putri (Pasien Poliklinik, 24 Tahun)',
+    name: 'Pasien 1: Nn. Nadia Putri (24 Thn)',
     role: 'patient',
-    title: 'Pasien Evaluasi Anemia Mikrositik',
-    zone: 'Doctor & Specialist Room',
-    position: [5, 0, 4],
+    title: 'Pasien Anemia Defisiensi Besi (Mikrositik Hipokromik)',
+    zone: 'Kursi Flebotomi & Poliklinik Hematologi',
+    position: [5, 0, 5],
     coatColor: '#fef3c7',
     scrubColor: '#d97706',
     hairColor: '#451a03',
+    patientStationType: 'chair',
+    patientClinicalCard: {
+      rmNumber: 'RM-ATLM-001',
+      ageGender: '24 Tahun / Perempuan',
+      bedOrStation: 'Kursi Flebotomi #1 — Poliklinik Hematologi',
+      diagnosisSummary: 'Anemia Defisiensi Besi (ADB) — Mikrositik Hipokromik',
+      anamnesis:
+        'Cepat lelah sejak 3 bulan, pusing saat naik tangga, haid banyak 7–8 hari tiap siklus (menoragia), sering minum teh pekat sehabis makan.',
+      physicalExam:
+        'TD 106/68 mmHg, Nadi 98x/menit, konjungtiva palpebra pucat (+/+), koilonikia (kuku sendok) ringan, atrofi papil lidah.',
+      cbcAndIndices:
+        'Hb 8,4 g/dL | Hct 27% | RBC 4,2 juta/µL | MCV = (27×10)/4,2 = 64,3 fL | MCH = (8,4×10)/4,2 = 20,0 pg | MCHC = (8,4×100)/27 = 31,1 g/dL | RDW 18,8% | Feritin 7 ng/mL',
+      smearMorphology:
+        'Eritrosit mikrositik hipokromik, central pallor melebar > 1/2 diameter sel, anisopoikilositosis dengan sel pensil (eliptosit).',
+      atlmDecisionAndTherapy:
+        'Validasi kesesuaian indeks MCV/MCH rendah dengan apusan darah tepi & feritin rendah. Dokter memberikan preparat besi oral (Sulfas Ferosus) + Vitamin C, edukasi hindari teh/kopi dekat jam makan.',
+    },
     dialogues: [
       {
-        topic: 'Keluhan Klinis Pasien Anemia',
-        id: 'Kak ATLM, sudah tiga minggu ini saya merasa cepat lelah, sering pusing saat kuliah, dan wajah saya dibilang pucat. Tadi hasil lab saya Hb 9,5 g/dL dan MCV 72 fL. Apa artinya ya?',
-        en: 'Hello ATLM, for the past three weeks I have felt exhausted, dizzy during lectures, and pale. My lab result shows Hb 9.5 g/dL and MCV 72 fL. What does that mean?',
+        topic: 'Keluhan Klinis Pasien Anemia Defisiensi Besi',
+        id: 'Kak ATLM, sudah tiga bulan ini saya merasa cepat lelah, sering pusing saat kuliah, dan haid saya cukup banyak. Hasil lab saya Hb 8,4 g/dL, Hct 27%, RBC 4,2 juta/µL, dan MCV 64,3 fL. Apa artinya ya?',
+        en: 'Hello ATLM, for three months I have felt exhausted and dizzy with heavy periods. My lab shows Hb 8.4 g/dL, Hct 27%, RBC 4.2 million/µL, and MCV 64.3 fL. What does that mean?',
       },
       {
-        topic: 'Penjelasan Hasil & Edukasi',
-        id: 'Terima kasih penjelasannya! Dokter juga menjelaskan bahwa MCV 72 fL berarti ukuran sel darah merah saya lebih kecil dari normal (mikrositik) karena cadangan zat besi (ferritin) saya rendah.',
-        en: 'Thank you for explaining! The doctor also told me that an MCV of 72 fL means my red blood cells are smaller than normal (microcytic) due to low iron stores (ferritin).',
+        topic: 'Edukasi Konsumsi Tablet Besi & Teh',
+        id: 'Terima kasih penjelasannya! Berarti ukuran eritrosit saya kecil-kecil dan pucat (mikrositik hipokromik) karena cadangan zat besi (feritin 7 ng/mL) sangat rendah. Saya akan minum tablet besi bersama jeruk dan menghindari teh sehabis makan.',
+        en: 'Thank you! So my red blood cells are small and pale (microcytic hypochromic) due to depleted iron stores (ferritin 7 ng/mL). I will take iron tablets with vitamin C and avoid tea after meals.',
+      },
+    ],
+  },
+  {
+    id: 'npc_patient_rizky',
+    name: 'Pasien 2: An. Rizky Pratama (14 Thn)',
+    role: 'patient',
+    title: 'Pasien Demam Berdarah Dengue (DBD) — Hemokonsentrasi & Trombositopenia',
+    zone: 'Bangsal Rawat Inap & IGD (Bed #1)',
+    position: [-10, 0, 7],
+    coatColor: '#dbeafe',
+    scrubColor: '#0284c7',
+    hairColor: '#1e293b',
+    patientStationType: 'bed',
+    patientClinicalCard: {
+      rmNumber: 'RM-ATLM-002',
+      ageGender: '14 Tahun / Laki-laki',
+      bedOrStation: 'Bed Rawat Inap #1 — Zona IGD & Observasi Dengue',
+      diagnosisSummary: 'Demam Berdarah Dengue (Fase Kritis) dengan Kebocoran Plasma',
+      anamnesis:
+        'Demam tinggi mendadak 4 hari, nyeri belakang mata, mual, bintik merah di lengan (petekie), dan mimisan ringan tadi pagi.',
+      physicalExam:
+        'TD 100/70 mmHg, Nadi 108x/menit, Suhu 38,2°C, uji tourniquet positif, nyeri tekan epigastrium (+), akral mulai dingin.',
+      cbcAndIndices:
+        'Hb 16,2 g/dL | Hct 49% (naik >20% dari baseline 39%) | WBC 3.100/µL (Leukopenia) | Trombosit 28.000/µL | MCV 86 fL | MCHC 33,1 g/dL',
+      smearMorphology:
+        'Trombosit tampak jarang (sesuai trombositopenia sejati, bebas clumping EDTA), ditemukan limfosit atipik / limfosit plasma biru (reaktif).',
+      atlmDecisionAndTherapy:
+        'Verifikasi apusan bahwa trombositopenia bukan artefak clumping, lalu segera laporkan kenaikan Hct 49% (hemokonsentrasi) & trombosit 28.000/µL ke dokter untuk resusitasi cairan kristaloid serial.',
+    },
+    dialogues: [
+      {
+        topic: 'Pemantauan Serial Hematokrit & Trombosit DBD',
+        id: 'Kak ATLM, badan saya lemas sekali di hari ke-4 demam ini dan tadi sempat mimisan. Mengapa darah saya diambil berkali-kali setiap beberapa jam untuk cek Hematokrit dan Trombosit?',
+        en: 'Hello ATLM, I feel very weak on day 4 of fever and had a nosebleed. Why is my blood drawn every few hours to check Hematocrit and Platelets?',
+      },
+      {
+        topic: 'Makna Kenaikan Hematokrit 49% (Hemokonsentrasi)',
+        id: 'Oh begitu, jadi Hematokrit saya yang naik dari 39% menjadi 49% menunjukkan darah saya mengental akibat perembesan plasma, sehingga dokter perlu mengatur tetesan infus cairan saya dengan tepat.',
+        en: 'I see, so my Hematocrit rising from 39% to 49% shows hemoconcentration due to plasma leakage, which guides the doctor in adjusting my IV fluid rate.',
+      },
+    ],
+  },
+  {
+    id: 'npc_patient_bima',
+    name: 'Pasien 3: Tn. Bima Sakti (52 Thn)',
+    role: 'patient',
+    title: 'Pasien Anemia Megaloblastik (Defisiensi Vitamin B12 / Folat)',
+    zone: 'Bangsal Rawat Inap & IGD (Bed #2)',
+    position: [-5, 0, 9],
+    coatColor: '#ede9fe',
+    scrubColor: '#6d28d9',
+    hairColor: '#334155',
+    patientStationType: 'bed',
+    patientClinicalCard: {
+      rmNumber: 'RM-ATLM-003',
+      ageGender: '52 Tahun / Laki-laki',
+      bedOrStation: 'Bed Rawat Inap #2 — Bangsal Penyakit Dalam',
+      diagnosisSummary: 'Anemia Makrositik Megaloblastik e.c. Defisiensi Vitamin B12',
+      anamnesis:
+        'Lemas progresif sejak 3 bulan, lidah terasa perih (glositis), serta kesemutan dan baal pada kedua telapak kaki (neuropati perifer). Riwayat operasi lambung.',
+      physicalExam:
+        'Konjungtiva pucat (+/+), sklera sub-ikterik ringan, lidah merah licin mengkilap (beefy red tongue), penurunan sensasi getar di ekstremitas bawah.',
+      cbcAndIndices:
+        'Hb 7,8 g/dL | Hct 24% | RBC 2,0 juta/µL | MCV = (24×10)/2,0 = 120,0 fL (Makrositik nyata) | MCH = 39,0 pg | MCHC = 32,5 g/dL | WBC 3.600/µL | PLT 110.000/µL',
+      smearMorphology:
+        'Makrosit oval (macro-ovalocytes), anisopoikilositosis jelas, dan ditemukan Neutrofil Hipersegmentasi (inti ≥ 6 lobus).',
+      atlmDecisionAndTherapy:
+        'Laporkan MCV 120 fL disertai temuan khas macro-ovalocytes dan neutrofil hipersegmentasi pada SADT. Dokter memeriksa kadar B12/folat dan memberikan terapi Kobalamin.',
+    },
+    dialogues: [
+      {
+        topic: 'Anemia Makrositik (MCV 120 fL) & Kesemutan',
+        id: 'Kak ATLM, selain pucat dan lemas, lidah saya terasa perih dan kedua kaki saya sering kesemutan. Di lembar hasil lab tertulis MCV 120 fL. Mengapa ukuran sel darah merah saya justru membesar?',
+        en: 'Hello ATLM, besides feeling pale and weak, my tongue is sore and my feet tingle. My lab report says MCV 120 fL. Why are my red blood cells enlarged?',
+      },
+      {
+        topic: 'Temuan Makrosit Oval & Neutrofil Hipersegmentasi',
+        id: 'Penjelasan Kak ATLM sangat jelas! Kekurangan Vitamin B12 menghambat pematangan DNA inti sel di sumsum tulang sehingga terbentuk makrosit oval dan neutrofil berlobus banyak.',
+        en: 'Your explanation is very clear! Vitamin B12 deficiency impairs nuclear DNA maturation in the bone marrow, producing macro-ovalocytes and hypersegmented neutrophils.',
+      },
+    ],
+  },
+  {
+    id: 'npc_patient_hendra',
+    name: 'Pasien 4: Tn. Hendra Wijaya (58 Thn)',
+    role: 'patient',
+    title: 'Pasien Anemia Penyakit Ginjal Kronis (Normositik Normokromik)',
+    zone: 'Bangsal Rawat Inap & IGD (Bed #3)',
+    position: [0, 0, 10],
+    coatColor: '#ccfbf1',
+    scrubColor: '#0f766e',
+    hairColor: '#475569',
+    patientStationType: 'bed',
+    patientClinicalCard: {
+      rmNumber: 'RM-ATLM-004',
+      ageGender: '58 Tahun / Laki-laki',
+      bedOrStation: 'Bed Rawat Inap #3 — Unit Nefrologi & Hemodialisis',
+      diagnosisSummary: 'Anemia Normositik Normokromik Hipoproliferatif pada CKD Stadium 4',
+      anamnesis:
+        'Mudah lelah dan sesak saat berjalan jauh. Riwayat hipertensi 12 tahun dan gagal ginjal kronis rutin kontrol.',
+      physicalExam:
+        'TD 154/92 mmHg, konjungtiva pucat (+/+), edema pretibial ringan bilateral (+/+), tidak ada hepatosplenomegali.',
+      cbcAndIndices:
+        'Hb 8,7 g/dL | Hct 26% | RBC 2,9 juta/µL | MCV = (26×10)/2,9 = 89,7 fL | MCH = 30,0 pg | MCHC = 33,5 g/dL | Retikulosit 0,5% (Rendah) | Ureum & Kreatinin meningkat',
+      smearMorphology:
+        'Eritrosit normositik normokromik, tampak beberapa sel Burr (echinocytes) dengan tonjolan pendek teratur khas uremia.',
+      atlmDecisionAndTherapy:
+        'Konfirmasi indeks normositik normokromik (Rule of Three terpenuhi: Hb 8,7 × 3 ≈ Hct 26%) dengan retikulosit rendah. Mendukung terapi Erythropoiesis-Stimulating Agent (EPO) oleh dokter.',
+    },
+    dialogues: [
+      {
+        topic: 'Hubungan Gagal Ginjal dengan Anemia Normositik',
+        id: 'Selamat pagi Kak ATLM. Nilai MCV saya 89,7 fL dan MCHC 33,5 g/dL dikatakan normal, tetapi mengapa Hb saya turun menjadi 8,7 g/dL padahal saya sakit ginjal?',
+        en: 'Good morning ATLM. My MCV is 89.7 fL and MCHC is 33.5 g/dL which are normal, so why is my Hemoglobin low at 8.7 g/dL with kidney disease?',
+      },
+      {
+        topic: 'Peran Hormon Eritropoietin (EPO) Ginjal',
+        id: 'Baru sekarang saya paham bahwa ginjal memproduksi hormon Eritropoietin (EPO) untuk memicu sumsum tulang membentuk sel darah merah baru.',
+        en: 'Now I understand that healthy kidneys produce Erythropoietin (EPO) hormone to stimulate the bone marrow to produce new red blood cells.',
+      },
+    ],
+  },
+  {
+    id: 'npc_patient_dewi',
+    name: 'Pasien 5: Ny. Dewi Sartika (31 Thn)',
+    role: 'patient',
+    title: 'Pasien Anemia Hemolitik Autoimun (AIHA) & Evaluasi Bank Darah',
+    zone: 'Kursi Observasi Transfusi & Imunohematologi',
+    position: [9, 0, 6],
+    coatColor: '#fce7f3',
+    scrubColor: '#be185d',
+    hairColor: '#1e293b',
+    patientStationType: 'chair',
+    patientClinicalCard: {
+      rmNumber: 'RM-ATLM-005',
+      ageGender: '31 Tahun / Perempuan',
+      bedOrStation: 'Kursi Observasi #2 — Unit Imunohematologi & Bank Darah',
+      diagnosisSummary: 'Anemia Hemolitik Autoimun (AIHA) Tipe Hangat',
+      anamnesis:
+        'Lemas berat mendadak sejak 1 minggu, mata tampak kuning (ikterik), dan urin berwarna gelap seperti teh pekat.',
+      physicalExam:
+        'TD 104/66 mmHg, Nadi 106x/menit, sklera ikterik (+/+), konjungtiva sangat pucat, splenomegali ringan (Schuffner I).',
+      cbcAndIndices:
+        'Hb 6,2 g/dL (Nilai Kritis) | Hct 18% | RBC 1,9 juta/µL | MCV 94,7 fL | MCHC 34,4 g/dL | Retikulosit 11,5% (Meningkat tajam) | Bilirubin Indirek & LDH meningkat | Direct Coombs Test (DAT) Positif kuat (IgG/C3d)',
+      smearMorphology:
+        'Polikromasia mencolok (retikulositosis), banyak ditemukan Sferosit (eritrosit bulat padat tanpa central pallor), serta eritroblas berinti (NRBC).',
+      atlmDecisionAndTherapy:
+        'Koreksi hitung WBC bila NRBC tinggi, laporkan Hb kritis 6,2 g/dL, sferosit, dan DAT positif. Koordinasi khusus crossmatch di Bank Darah karena autoantibodi hangat dapat membuat crossmatch tampak inkompatibel.',
+    },
+    dialogues: [
+      {
+        topic: 'Gejala Hemolisis: Ikterik & Retikulosit Tinggi',
+        id: 'Kak ATLM, mengapa mata saya agak kuning dan hasil Retikulosit saya tinggi sekali (11,5%) sementara Hb saya turun drastis ke 6,2 g/dL?',
+        en: 'Hello ATLM, why are my eyes yellowish and my Reticulocyte count so high (11.5%) while my Hemoglobin dropped to 6.2 g/dL?',
+      },
+      {
+        topic: 'Uji Coombs (DAT) & Sferosit pada AIHA',
+        id: 'Terima kasih atas ketelitian laboratorium ATLM dalam memeriksa uji Coombs langsung (DAT) dan menyiapkan darah transfusi paling aman bersama dokter.',
+        en: 'Thank you for the laboratory precision in performing the Direct Antiglobulin Test (DAT) and coordinating the safest transfusion unit with my doctor.',
+      },
+    ],
+  },
+  {
+    id: 'npc_patient_ahmad',
+    name: 'Pasien 6: Tn. Ahmad Fauzi (46 Thn)',
+    role: 'patient',
+    title: 'Pasien Tersangka Leukemia Akut (Hiperleukositosis & Sel Blas)',
+    zone: 'Bangsal Isolasi Hematologi (Bed #4)',
+    position: [10, 0, 10],
+    coatColor: '#fee2e2',
+    scrubColor: '#b91c1c',
+    hairColor: '#1e293b',
+    patientStationType: 'bed',
+    patientClinicalCard: {
+      rmNumber: 'RM-ATLM-006',
+      ageGender: '46 Tahun / Laki-laki',
+      bedOrStation: 'Bed Isolasi #4 — Bangsal Hematologi Onkologi',
+      diagnosisSummary: 'Suspek Leukemia Akut dengan Bisitopenia & Leukositosis Ekstrem',
+      anamnesis:
+        'Demam berulang 2 minggu, gusi sering berdarah spontan, memar kebiruan di kulit tanpa benturan, dan nyeri tulang dada.',
+      physicalExam:
+        'Konjungtiva pucat (+/+), perdarahan gingiva (+), ekimosis multipel di ekstremitas, hepatosplenomegali (+), limfadenopati servikal.',
+      cbcAndIndices:
+        'Hb 6,8 g/dL (Kritis) | Hct 20% | WBC 68.500/µL (Kritis / Flag Blast) | Trombosit 21.000/µL (Kritis) | MCV 88 fL | MCHC 34,0 g/dL',
+      smearMorphology:
+        'Leukositosis masif didominasi populasi sel muda berukuran besar dengan kromatin halus dan anak inti (nucleoli) jelas (Sel Blas > 30%), trombosit sangat jarang.',
+      atlmDecisionAndTherapy:
+        'Wajib membuat & menelaah SADT segera saat muncul flag blas, melakukan hitung jenis manual, serta melaporkan nilai kritis (Hb 6,8 g/dL, WBC 68.500/µL, PLT 21.000/µL, temuan sel blas) langsung ke dokter.',
+    },
+    dialogues: [
+      {
+        topic: 'Pentingnya Evaluasi Apusan pada Leukosit Sangat Tinggi',
+        id: 'Kak ATLM, gusi saya mudah berdarah dan badan saya lemas sekali. Kata dokter, jumlah sel darah putih (leukosit) saya mencapai 68.500/µL dan sedang diperiksa apusan darah tepinya di mikroskop.',
+        en: 'Hello ATLM, my gums bleed easily and I feel very weak. The doctor said my white blood cell count reached 68,500/µL and my blood smear is being examined under the microscope.',
+      },
+      {
+        topic: 'Komunikasi Nilai Kritis ATLM kepada Dokter',
+        id: 'Syukurlah tim ATLM segera melaporkan nilai kritis Hb, Trombosit, dan temuan sel muda kepada dokter spesialis sehingga saya langsung mendapat penanganan cepat.',
+        en: 'Thankfully the ATLM team immediately reported the critical Hemoglobin, Platelet, and blast cell findings to the specialist so I could receive prompt care.',
       },
     ],
   },

@@ -280,6 +280,97 @@ function buildLabInstrumentGroup(item: LabEquipmentItem): THREE.Group {
   return group;
 }
 
+function buildPatientStationGroup(stationType: 'bed' | 'chair', accentColor: string): THREE.Group {
+  const group = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: '#cbd5e1',
+    metalness: 0.4,
+    roughness: 0.35,
+  });
+  const mattressMat = new THREE.MeshStandardMaterial({
+    color: '#f8fafc',
+    roughness: 0.45,
+  });
+  const blanketMat = new THREE.MeshStandardMaterial({
+    color: accentColor || '#0284c7',
+    roughness: 0.5,
+  });
+  const ivPoleMat = new THREE.MeshStandardMaterial({
+    color: '#94a3b8',
+    metalness: 0.6,
+    roughness: 0.25,
+  });
+  const ivBagMat = new THREE.MeshStandardMaterial({
+    color: '#38bdf8',
+    transparent: true,
+    opacity: 0.85,
+  });
+
+  if (stationType === 'bed') {
+    // Hospital Bed Frame & Mattress positioned behind/next to the patient avatar
+    const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.45, 2.3), frameMat);
+    bedFrame.position.set(0, 0.25, -0.75);
+    group.add(bedFrame);
+
+    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.22, 2.15), mattressMat);
+    mattress.position.set(0, 0.56, -0.75);
+    group.add(mattress);
+
+    const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.24, 1.35), blanketMat);
+    blanket.position.set(0, 0.58, -0.45);
+    group.add(blanket);
+
+    const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.14, 0.45), mattressMat);
+    pillow.position.set(0, 0.72, -1.5);
+    group.add(pillow);
+
+    const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.52, 1.15, 0.14), frameMat);
+    headboard.position.set(0, 0.7, -1.88);
+    group.add(headboard);
+
+    // IV Drip Stand (Tiang Infus) & Fluid Bag
+    const ivBase = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 12), ivPoleMat);
+    ivBase.position.set(1.05, 0.04, -1.2);
+    group.add(ivBase);
+
+    const ivPole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 10), ivPoleMat);
+    ivPole.position.set(1.05, 1.1, -1.2);
+    group.add(ivPole);
+
+    const ivBag = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.32, 0.1), ivBagMat);
+    ivBag.position.set(1.05, 1.95, -1.12);
+    group.add(ivBag);
+  } else {
+    // Clinical Phlebotomy Chair (Kursi Pengambilan Sampel Darah Vena)
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.16, 1.0), blanketMat);
+    seat.position.set(0, 0.52, -0.45);
+    group.add(seat);
+
+    const backrest = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.05, 0.16), blanketMat);
+    backrest.position.set(0, 1.05, -0.92);
+    group.add(backrest);
+
+    const leftArmrest = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.1, 0.85), frameMat);
+    leftArmrest.position.set(-0.6, 0.78, -0.42);
+    group.add(leftArmrest);
+
+    const rightArmrest = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.92), frameMat);
+    rightArmrest.position.set(0.62, 0.78, -0.38);
+    group.add(rightArmrest);
+  }
+
+  // Patient Beacon Ring above patient
+  const patientRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.48, 0.04, 10, 28),
+    new THREE.MeshBasicMaterial({ color: '#f59e0b' })
+  );
+  patientRing.rotation.x = Math.PI / 2;
+  patientRing.position.set(0, 2.65, 0);
+  group.add(patientRing);
+
+  return group;
+}
+
 function build3DBloodCell(type: 'rbc' | 'wbc' | 'plt'): THREE.Group {
   const group = new THREE.Group();
   if (type === 'rbc') {
@@ -393,8 +484,8 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
     const height = container.clientHeight || window.innerHeight;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0f172a');
-    scene.fog = new THREE.FogExp2('#0f172a', 0.018);
+    scene.background = new THREE.Color('#273e57');
+    scene.fog = new THREE.FogExp2('#273e57', 0.015);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 160);
 
@@ -422,31 +513,31 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
     pmrem.dispose();
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight('#f8fafc', 0.65);
+    const ambientLight = new THREE.AmbientLight('#f8fafc', 0.78);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight('#ffffff', 1.1);
+    const dirLight = new THREE.DirectionalLight('#ffffff', 1.15);
     dirLight.position.set(12, 24, 14);
     scene.add(dirLight);
 
     // Hospital Floor & Zone Carpets
     const floorMat = new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      roughness: 0.6,
+      color: '#364f6b',
+      roughness: 0.55,
       metalness: 0.1,
     });
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(56, 56), floorMat);
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
 
-    const gridHelper = new THREE.GridHelper(56, 28, '#38bdf8', '#334155');
+    const gridHelper = new THREE.GridHelper(56, 28, '#7dd3fc', '#476585');
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
     // Futuristic Hematology Lab Zone Floor Highlight
     const labZoneFloor = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 14),
-      new THREE.MeshStandardMaterial({ color: '#0c4a6e', roughness: 0.35 })
+      new THREE.MeshStandardMaterial({ color: '#1e567c', roughness: 0.35 })
     );
     labZoneFloor.rotation.x = -Math.PI / 2;
     labZoneFloor.position.set(0, 0.02, -3);
@@ -454,7 +545,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
 
     // Hospital Walls & Glass Partitions
     const wallMat = new THREE.MeshStandardMaterial({
-      color: '#0f172a',
+      color: '#243b55',
       roughness: 0.5,
     });
     const backWall = new THREE.Mesh(new THREE.BoxGeometry(40, 6, 0.4), wallMat);
@@ -470,16 +561,30 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
       equipmentMeshes.push({ item: eqItem, group: eqGroup });
     });
 
-    // NPCs in 3D
+    // NPCs & 6 Clinical Patients in 3D
     const npcMeshes: { npc: NpcCharacterData; group: THREE.Group; basePos: THREE.Vector3 }[] = [];
     HOSPITAL_NPCS.forEach((npc) => {
+      if (npc.role === 'patient') {
+        const stationMesh = buildPatientStationGroup(
+          npc.patientStationType || 'bed',
+          npc.scrubColor
+        );
+        stationMesh.position.set(npc.position[0], npc.position[1], npc.position[2]);
+        scene.add(stationMesh);
+      }
+
       const npcGroup = buildRobloxCharacter({
         coatColor: npc.coatColor,
         scrubColor: npc.scrubColor,
         hairColor: npc.hairColor,
         skinTone: '#f1c27d',
-        isFemale: npc.id.includes('juwita') || npc.id.includes('arasya') || npc.id.includes('siti') || npc.id.includes('nadia'),
-        isAtlmBadge: true,
+        isFemale:
+          npc.id.includes('juwita') ||
+          npc.id.includes('arasya') ||
+          npc.id.includes('siti') ||
+          npc.id.includes('nadia') ||
+          npc.id.includes('dewi'),
+        isAtlmBadge: npc.role !== 'patient',
       });
       npcGroup.position.set(npc.position[0], npc.position[1], npc.position[2]);
       scene.add(npcGroup);
@@ -758,6 +863,13 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
           Lab Hematologi
         </button>
         <button
+          onClick={() => teleportToZone(-2, 8, 'Bangsal Rawat Inap & Kursi Flebotomi Pasien 3D')}
+          className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow"
+        >
+          <UserCheck className="w-3.5 h-3.5" />
+          Bangsal 6 Pasien 3D
+        </button>
+        <button
           onClick={() => teleportToZone(6, 0, 'Ruang Konsultasi Dokter Spesialis')}
           className="px-3 py-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-xs font-medium text-white flex items-center gap-1.5 transition"
         >
@@ -884,21 +996,23 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         </div>
       )}
 
-      {/* Interactive NPC Bilingual Speech Bubble Modal */}
+      {/* Interactive NPC & 3D Patient Clinical Card Modal */}
       {activeNpc && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 max-w-xl w-[92%] bg-slate-900/95 backdrop-blur-md border border-sky-400/50 rounded-2xl p-5 text-white shadow-2xl">
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 max-w-2xl w-[94%] max-h-[75vh] overflow-y-auto bg-[#243b55]/95 backdrop-blur-md border border-sky-300/50 rounded-2xl p-5 text-white shadow-2xl">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-sky-400">
-                {activeNpc.zone} • {activeNpc.dialogues[npcDialogueIndex]?.topic}
+              <span className="text-[11px] font-mono uppercase tracking-wider text-amber-300 font-bold">
+                {activeNpc.role === 'patient'
+                  ? `REKAM KLINIS PASIEN 3D • ${activeNpc.patientClinicalCard?.rmNumber || ''}`
+                  : `${activeNpc.zone} • ${activeNpc.dialogues[npcDialogueIndex]?.topic}`}
               </span>
-              <h4 className="text-base font-bold text-white mt-0.5">{activeNpc.name}</h4>
-              <p className="text-xs text-slate-300">{activeNpc.title}</p>
+              <h4 className="text-base md:text-lg font-bold text-white mt-0.5">{activeNpc.name}</h4>
+              <p className="text-xs text-sky-200">{activeNpc.title}</p>
             </div>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setDialogueLang(dialogueLang === 'id' ? 'en' : 'id')}
-                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-sky-300 border border-slate-700"
+                className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono text-sky-200 border border-[#4a6c94]"
               >
                 {dialogueLang === 'id' ? 'ID → EN' : 'EN → ID'}
               </button>
@@ -910,21 +1024,61 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                       : activeNpc.dialogues[npcDialogueIndex].en;
                   soundManager.speakNpc(text, dialogueLang === 'id' ? 'id-ID' : 'en-US');
                 }}
-                className="p-1.5 rounded bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/40"
+                className="p-1.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-200 border border-sky-400/40"
                 title="Dengarkan Suara Karakter"
               >
                 <Volume2 className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setActiveNpc(null)}
-                className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400"
+                className="p-1.5 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-slate-200"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <p className="mt-3 text-sm leading-relaxed text-slate-100 bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+          {/* Patient Clinical & Lab Data Table when inspecting a 3D Patient */}
+          {activeNpc.patientClinicalCard && (
+            <div className="mt-3 rounded-xl bg-[#edf2f7] text-slate-800 border border-slate-300 p-3.5 space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-300 font-mono">
+                <span className="font-bold text-sky-900">
+                  {activeNpc.patientClinicalCard.bedOrStation}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
+                  {activeNpc.patientClinicalCard.diagnosisSummary}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                <div>
+                  <p className="font-mono font-bold text-[11px] uppercase text-sky-900">
+                    Anamnesis & Pemeriksaan Fisik:
+                  </p>
+                  <p className="mt-0.5 leading-relaxed">{activeNpc.patientClinicalCard.anamnesis}</p>
+                  <p className="mt-1 text-slate-700 leading-relaxed">
+                    <strong>Fisik:</strong> {activeNpc.patientClinicalCard.physicalExam}
+                  </p>
+                </div>
+                <div>
+                  <p className="font-mono font-bold text-[11px] uppercase text-rose-900">
+                    Hasil CBC & Indeks Eritrosit (MCV/MCH/MCHC):
+                  </p>
+                  <p className="mt-0.5 font-mono text-slate-900 font-medium leading-relaxed">
+                    {activeNpc.patientClinicalCard.cbcAndIndices}
+                  </p>
+                  <p className="mt-1 text-slate-700 leading-relaxed">
+                    <strong>Apusan Darah Tepi:</strong> {activeNpc.patientClinicalCard.smearMorphology}
+                  </p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-slate-300 text-emerald-950 bg-emerald-100/60 p-2.5 rounded-lg">
+                <strong>Keputusan ATLM & Terapi Dokter:</strong>{' '}
+                {activeNpc.patientClinicalCard.atlmDecisionAndTherapy}
+              </div>
+            </div>
+          )}
+
+          <p className="mt-3 text-sm leading-relaxed text-slate-100 bg-[#1b2e43] p-3.5 rounded-xl border border-[#3a5778]">
             “
             {dialogueLang === 'id'
               ? activeNpc.dialogues[npcDialogueIndex]?.id
@@ -932,18 +1086,18 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
             ”
           </p>
 
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-mono">
-              Topik {npcDialogueIndex + 1} / {activeNpc.dialogues.length}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-slate-300 font-mono">
+              Dialog {npcDialogueIndex + 1} / {activeNpc.dialogues.length}
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() =>
                   setNpcDialogueIndex((prev) => (prev + 1) % activeNpc.dialogues.length)
                 }
-                className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold"
+                className="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold"
               >
-                Topik Berikutnya →
+                Dialog Berikutnya →
               </button>
               {onStartQuiz && (
                 <button
@@ -951,9 +1105,9 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                     setActiveNpc(null);
                     onStartQuiz();
                   }}
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold flex items-center gap-1"
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center gap-1"
                 >
-                  <Play className="w-3.5 h-3.5" /> Mulai Kuis 30 Soal
+                  <Play className="w-3.5 h-3.5" /> Mulai Kuis 50 Soal A–E
                 </button>
               )}
             </div>
@@ -961,28 +1115,27 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         </div>
       )}
 
-      {/* Collapsible Bottom Control Dock (Mobile Touch Pads + Keyboard Guide + Direct Station Inspector) */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-4xl bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-xl px-4 py-2.5 text-white shadow-xl">
+      {/* Collapsible Bottom Control Dock (Mobile Touch Pads + 6 Patients Selector + Lab Instruments) */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 w-[96%] max-w-5xl bg-[#243b55]/90 backdrop-blur-md border border-[#45678e] rounded-xl px-4 py-2.5 text-white shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 text-xs">
-            <span className="font-mono text-sky-400 font-semibold flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> KONTROL AVATAR ATLM 3D
+            <span className="font-mono text-sky-300 font-semibold flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> KONTROL AVATAR ATLM & PASIEN 3D
             </span>
-            <span className="hidden md:inline text-slate-300">
+            <span className="hidden md:inline text-slate-200">
               <strong className="text-white font-mono">WASD</strong> Jalan •{' '}
               <strong className="text-white font-mono">Shift</strong> Lari •{' '}
               <strong className="text-white font-mono">Space</strong> Lompat •{' '}
-              <strong className="text-white font-mono">E</strong> Interaksi Alat/NPC •{' '}
-              <strong className="text-white font-mono">Drag Mouse</strong> Putar Kamera
+              <strong className="text-white font-mono">E</strong> Interaksi Pasien/Alat
             </span>
           </div>
           <button
             onClick={() => setDockCollapsed(!dockCollapsed)}
-            className="text-xs text-slate-300 hover:text-white flex items-center gap-1 font-mono"
+            className="text-xs text-slate-200 hover:text-white flex items-center gap-1 font-mono"
           >
             {dockCollapsed ? (
               <>
-                Tampilkan Stasiun Lab <ChevronUp className="w-4 h-4" />
+                Tampilkan Pasien & Alat 3D <ChevronUp className="w-4 h-4" />
               </>
             ) : (
               <>
@@ -993,62 +1146,86 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         </div>
 
         {!dockCollapsed && (
-          <div className="mt-2.5 pt-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-            {/* Touch D-Pad for Mobile / Tablet */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onMouseDown={() => (keysRef.current['KeyW'] = true)}
-                onMouseUp={() => (keysRef.current['KeyW'] = false)}
-                onTouchStart={() => (keysRef.current['KeyW'] = true)}
-                onTouchEnd={() => (keysRef.current['KeyW'] = false)}
-                className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono border border-slate-700"
-              >
-                ▲ Maju
-              </button>
-              <button
-                onMouseDown={() => (keysRef.current['KeyS'] = true)}
-                onMouseUp={() => (keysRef.current['KeyS'] = false)}
-                onTouchStart={() => (keysRef.current['KeyS'] = true)}
-                onTouchEnd={() => (keysRef.current['KeyS'] = false)}
-                className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono border border-slate-700"
-              >
-                ▼ Mundur
-              </button>
-              <button
-                onMouseDown={() => (keysRef.current['KeyA'] = true)}
-                onMouseUp={() => (keysRef.current['KeyA'] = false)}
-                onTouchStart={() => (keysRef.current['KeyA'] = true)}
-                onTouchEnd={() => (keysRef.current['KeyA'] = false)}
-                className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono border border-slate-700"
-              >
-                ◀ Kiri
-              </button>
-              <button
-                onMouseDown={() => (keysRef.current['KeyD'] = true)}
-                onMouseUp={() => (keysRef.current['KeyD'] = false)}
-                onTouchStart={() => (keysRef.current['KeyD'] = true)}
-                onTouchEnd={() => (keysRef.current['KeyD'] = false)}
-                className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono border border-slate-700"
-              >
-                Kanan ▶
-              </button>
-            </div>
-
-            {/* Quick Clickable Lab Equipment Selector */}
+          <div className="mt-2.5 pt-2.5 border-t border-[#3a5778] space-y-2">
+            {/* Row 1: Direct Clickable 6 Clinical Patients in 3D */}
             <div className="flex flex-wrap items-center gap-1.5">
-              {LAB_EQUIPMENT_3D_ITEMS.slice(0, 5).map((eq) => (
+              <span className="text-[11px] font-mono font-bold text-amber-300 mr-1">
+                PASIEN 3D:
+              </span>
+              {HOSPITAL_NPCS.filter((n) => n.role === 'patient').map((pat) => (
                 <button
-                  key={eq.id}
+                  key={pat.id}
                   onClick={() => {
-                    soundManager.playClick();
-                    setSelectedEquipment(eq);
+                    soundManager.playNpcInteract();
+                    teleportToZone(pat.position[0], pat.position[2] + 1.8, pat.zone);
+                    setActiveNpc(pat);
+                    setNpcDialogueIndex(0);
+                    setSelectedEquipment(null);
                   }}
-                  className="px-2.5 py-1 rounded bg-sky-950/90 hover:bg-sky-900 border border-sky-700/60 text-[11px] text-sky-200 flex items-center gap-1"
+                  className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/35 border border-amber-300/50 text-[11px] font-semibold text-amber-100 flex items-center gap-1 transition"
                 >
-                  <BookOpen className="w-3 h-3 text-sky-400" />
-                  {eq.indonesianName.split(' ')[0]} {eq.indonesianName.split(' ')[1]}
+                  <UserCheck className="w-3 h-3 text-amber-300" />
+                  {pat.name}
                 </button>
               ))}
+            </div>
+
+            {/* Row 2: D-Pad + Lab Equipment Selector */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onMouseDown={() => (keysRef.current['KeyW'] = true)}
+                  onMouseUp={() => (keysRef.current['KeyW'] = false)}
+                  onTouchStart={() => (keysRef.current['KeyW'] = true)}
+                  onTouchEnd={() => (keysRef.current['KeyW'] = false)}
+                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
+                >
+                  ▲ Maju
+                </button>
+                <button
+                  onMouseDown={() => (keysRef.current['KeyS'] = true)}
+                  onMouseUp={() => (keysRef.current['KeyS'] = false)}
+                  onTouchStart={() => (keysRef.current['KeyS'] = true)}
+                  onTouchEnd={() => (keysRef.current['KeyS'] = false)}
+                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
+                >
+                  ▼ Mundur
+                </button>
+                <button
+                  onMouseDown={() => (keysRef.current['KeyA'] = true)}
+                  onMouseUp={() => (keysRef.current['KeyA'] = false)}
+                  onTouchStart={() => (keysRef.current['KeyA'] = true)}
+                  onTouchEnd={() => (keysRef.current['KeyA'] = false)}
+                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
+                >
+                  ◀ Kiri
+                </button>
+                <button
+                  onMouseDown={() => (keysRef.current['KeyD'] = true)}
+                  onMouseUp={() => (keysRef.current['KeyD'] = false)}
+                  onTouchStart={() => (keysRef.current['KeyD'] = true)}
+                  onTouchEnd={() => (keysRef.current['KeyD'] = false)}
+                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
+                >
+                  Kanan ▶
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {LAB_EQUIPMENT_3D_ITEMS.slice(0, 5).map((eq) => (
+                  <button
+                    key={eq.id}
+                    onClick={() => {
+                      soundManager.playClick();
+                      setSelectedEquipment(eq);
+                    }}
+                    className="px-2.5 py-1 rounded bg-[#1d3249] hover:bg-[#274360] border border-sky-400/40 text-[11px] text-sky-200 flex items-center gap-1"
+                  >
+                    <BookOpen className="w-3 h-3 text-sky-300" />
+                    {eq.indonesianName.split(' ')[0]} {eq.indonesianName.split(' ')[1]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

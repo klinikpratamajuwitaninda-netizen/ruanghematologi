@@ -1,911 +1,1641 @@
+export type OptionKey = 'A' | 'B' | 'C' | 'D' | 'E';
+
+export interface ClinicalCaseTable {
+  anamnesis: string;
+  physicalExam: string;
+  doctorOrder: string;
+  labResults: string;
+  medicationContext: string;
+}
+
 export interface QuizQuestionItem {
   questionNumber: number;
-  category: 'clinical_case' | 'theory';
+  sectionCode: 'A' | 'B' | 'C' | 'D';
+  category: 'theory' | 'combined' | 'clinical_case' | 'calculation';
   topic: string;
+  caseTable?: ClinicalCaseTable;
   questionText: string;
   options: {
     A: string;
     B: string;
     C: string;
     D: string;
+    E: string;
   };
-  correctOption: 'A' | 'B' | 'C' | 'D';
+  correctOption: OptionKey;
   scientificExplanation: string;
-  optionRationales: {
-    A: string;
-    B: string;
-    C: string;
-    D: string;
-  };
-  calculationSteps?: string;
+  atlmProcedureAndDecision: string;
   doctorClinicalExplanation: string;
   patientEducation: string;
-  managementPlan: string;
+  whyOthersWrong: string;
+  calculationSteps?: string;
   pdfPageRef: string;
 }
 
 export const QUIZ_30_QUESTIONS: QuizQuestionItem[] = [
+  // ===========================================================================
+  // BAGIAN A: 10 SOAL TEORI (NOMOR 01 - 10)
+  // Dasar hematologi, specimen handling, morfologi, dan mutu hasil
+  // ===========================================================================
   {
     questionNumber: 1,
-    category: 'clinical_case',
-    topic: 'Kasus 1 — Anemia dengan Mikrositosis (Perhitungan MCV)',
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 01 | Antikoagulan untuk hitung darah lengkap',
     questionText:
-      'Seorang perempuan berusia 24 tahun datang ke poliklinik dengan keluhan mudah lelah, pusing, dan tampak pucat sejak beberapa minggu. Dokter melakukan anamnesis mengenai pola makan, riwayat menstruasi, dan kemungkinan perdarahan. Pada pemeriksaan fisik ditemukan konjungtiva pucat; tanda vital stabil. Hasil laboratorium: Hb 9,5 g/dL, hematokrit 28,8%, RBC 4,0 juta/µL, dan ferritin 8 ng/mL. Dokter menjelaskan bahwa indeks eritrosit diperlukan untuk mengelompokkan pola anemia sebelum penyebab dipastikan. Berapakah MCV pasien dan klasifikasi ukurannya?',
+      'Pada pengambilan sampel untuk pemeriksaan CBC, tujuan utama penggunaan K2EDTA ialah ...',
     options: {
-      A: '62 fL — mikrositik',
-      B: '72 fL — mikrositik',
-      C: '80 fL — normositik',
-      D: '96 fL — normositik',
+      A: 'Meningkatkan kadar hemoglobin melalui reaksi oksidasi',
+      B: 'Mengikat ion kalsium sehingga darah tidak membeku dan sel tetap dapat dihitung',
+      C: 'Mengubah fibrinogen menjadi fibrin',
+      D: 'Mencegah seluruh perubahan morfologi selama waktu tak terbatas',
+      E: 'Meningkatkan konsentrasi trombosit dengan memecah agregat',
     },
     correctOption: 'B',
     scientificExplanation:
-      'MCV (Mean Corpuscular Volume) menyatakan volume rata-rata satu sel eritrosit dalam satuan femtoliter (fL). Dengan Hct 28,8% dan RBC 4,0 juta/µL, diperoleh MCV = 72 fL. Karena berada di bawah rentang normal (80–100 fL), morfologi ukuran eritrosit diklasifikasikan sebagai mikrositik. Kadar ferritin 8 ng/mL (<15 ng/mL) mengonfirmasi cadangan besi tubuh yang terkuras.',
-    optionRationales: {
-      A: 'Tidak tepat: 62 fL tidak sesuai dengan substitusi data; hasil pembagian 288 / 4,0 adalah 72 fL.',
-      B: 'Tepat: 72 fL diperoleh dari (28,8 × 10) / 4,0 = 288 / 4,0 = 72 fL dan berada di bawah 80 fL (mikrositik).',
-      C: 'Tidak tepat: 80 fL bukan hasil perhitungan pasien, melainkan batas bawah rentang normositik.',
-      D: 'Tidak tepat: 96 fL tidak sesuai dengan hasil perhitungan dan termasuk rentang normositik.',
-    },
-    calculationSteps: 'Rumus: MCV = (Hct (%) × 10) / RBC (juta/µL) = (28,8 × 10) / 4,0 = 288 / 4,0 = 72 fL (< 80 fL → Mikrositik).',
+      'EDTA mengkelat kalsium yang diperlukan untuk koagulasi. Tabung EDTA sesuai untuk CBC, tetapi volume, pencampuran, waktu dan stabilitas sampel tetap harus mengikuti prosedur. EDTA kadang memicu agregasi trombosit in vitro sehingga hitung trombosit otomatis dapat tampak rendah palsu.',
+    atlmProcedureAndDecision:
+      'Pastikan tabung K2EDTA terisi sesuai tanda batas dan dihomogenkan secara inversi lembut 8–10 kali. Periksa ada tidaknya mikro-bekuan sebelum sampel dianalisis.',
     doctorClinicalExplanation:
-      'Dokter menginterpretasikan temuan Hb 9,5 g/dL (<12,0 g/dL), MCV 72 fL (mikrositik), dan ferritin 8 ng/mL sebagai Anemia Defisiensi Besi yang kemungkinan dipicu oleh menoragia atau kurangnya asupan besi.',
+      'Kualitas sampel EDTA yang bebas bekuan menjamin akurasi nilai Hb, jumlah leukosit, dan trombosit yang digunakan dokter dalam pengambilan keputusan klinis.',
     patientEducation:
-      'Dokter mengedukasi pasien untuk mengonsumsi makanan tinggi zat besi heme (daging merah, hati, ikan) disertai vitamin C (jeruk) untuk meningkatkan absorbsi besi, serta menghindari minum teh/kopi bersamaan dengan waktu makan.',
-    managementPlan:
-      'Pemberian suplementasi preparat besi oral oleh dokter, evaluasi sumber kehilangan darah menstruasi, dan pemantauan ulang Hb serta retikulosit setelah 2–4 minggu terapi.',
-    pdfPageRef: 'Halaman 23, 38, 40, dan 42',
+      'Penjelasan bahwa darah diambil menggunakan tabung bertutup ungu khusus agar darah tetap cair saat diperiksa oleh alat laboratorium.',
+    whyOthersWrong:
+      'A salah karena EDTA bukan reagen oksidasi Hb; C adalah peran trombin; D salah karena stabilitas morfologi dalam EDTA memiliki batas waktu (umumnya <2–4 jam untuk apusan optimal); E salah karena EDTA justru dapat memicu clumping trombosit pada sebagian kecil pasien.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah dr. Juwita Ninda, M.Kes); R2',
   },
   {
     questionNumber: 2,
-    category: 'clinical_case',
-    topic: 'Kasus 2 — Perhitungan MCH pada Pasien Anemia',
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 02 | Tabung untuk uji koagulasi',
     questionText:
-      'Seorang laki-laki berusia 35 tahun mengeluhkan penurunan stamina dan mudah lelah. Dokter menanyakan riwayat penyakit, asupan nutrisi, dan perdarahan. Pemeriksaan fisik menunjukkan konjungtiva agak pucat tanpa perdarahan aktif. Hasil CBC: Hb 8,4 g/dL, Hct 27%, RBC 3,5 juta/µL. Dokter meminta ATLM menghitung jumlah rata-rata hemoglobin per eritrosit (MCH), bukan ukuran selnya. Berapakah nilai MCH?',
+      'Untuk pemeriksaan PT dan aPTT pada pasien dengan hematokrit biasa, prinsip pengambilan darah yang tepat adalah ...',
     options: {
-      A: '20 pg',
-      B: '24 pg',
-      C: '27 pg',
-      D: '30 pg',
+      A: 'Tabung serum tanpa antikoagulan',
+      B: 'Tabung EDTA dengan rasio darah berapa saja',
+      C: 'Tabung sitrat 3,2% dengan rasio darah terhadap sitrat sekitar 9:1',
+      D: 'Tabung heparin dengan volume bebas',
+      E: 'Tabung fluorida untuk mempertahankan faktor koagulasi',
     },
-    correctOption: 'B',
+    correctOption: 'C',
     scientificExplanation:
-      'MCH (Mean Corpuscular Hemoglobin) menggambarkan bobot/massa rata-rata hemoglobin di dalam satu sel darah merah dalam satuan pikogram (pg), berbeda dari MCV yang mengukur volume sel.',
-    optionRationales: {
-      A: 'Tidak tepat: 20 pg tidak diperoleh dari pembagian 84 oleh 3,5.',
-      B: 'Tepat: 24 pg merupakan hasil perhitungan (8,4 × 10) / 3,5 = 84 / 3,5 = 24 pg (di bawah rentang normal 27–33 pg).',
-      C: 'Tidak tepat: 27 adalah angka Hematokrit (27%) pasien, bukan hasil perhitungan MCH.',
-      D: 'Tidak tepat: 30 pg tidak sesuai dengan pembagian Hb × 10 oleh jumlah RBC.',
-    },
-    calculationSteps: 'Rumus: MCH = (Hb (g/dL) × 10) / RBC (juta/µL) = (8,4 × 10) / 3,5 = 84 / 3,5 = 24 pg (< 27 pg → Menurun).',
+      'Uji PT/aPTT menggunakan plasma sitrat. Perbandingan darah dengan antikoagulan sekitar 9:1 menjadi penting karena sitrat berlebih pada tabung kurang terisi bisa memperpanjang hasil secara artifisial. Pada hematokrit sangat tinggi, volume sitrat perlu disesuaikan berdasarkan prosedur tervalidasi.',
+    atlmProcedureAndDecision:
+      'Gunakan tabung tutup biru muda (Natrium Sitrat 3,2%) dan verifikasi volume darah mencapai garis batas (toleransi ±10%) sebelum sentrifugasi untuk mendapatkan Platelet-Poor Plasma (PPP).',
     doctorClinicalExplanation:
-      'Nilai MCH 24 pg menunjukkan penurunan bobot hemoglobin rata-rata per sel eritrosit seiring dengan MCV pasien (270/3,5 = 77,1 fL) yang mikrositik.',
+      'Rasio 9:1 memungkinkan penambahan kembali kalsium secara presisi di alat koagulasi untuk mengukur waktu pembentukan bekuan fibrin jalur ekstrinsik (PT) dan intrinsik (aPTT).',
     patientEducation:
-      'Menjelaskan bahwa keluhan mudah lelah terjadi karena setiap sel darah merah membawa muatan hemoglobin pengikat oksigen yang lebih sedikit dari normal.',
-    managementPlan:
-      'Pemeriksaan Sediaan Apus Darah Tepi (SADT), panel besi (SI, TIBC, Ferritin), dan skrining darah samar feses (FOBT) untuk mencari sumber perdarahan kronis.',
-    pdfPageRef: 'Halaman 23, 39–40',
+      'Edukasi bahwa volume darah pada tabung koagulasi harus pas sesuai takaran agar hasil pemantauan pengencer darah akurat.',
+    whyOthersWrong:
+      'A salah karena serum sudah kehilangan fibrinogen dan faktor pembekuan; B dan D menghambat koagulasi secara tidak sesuai untuk uji PT/aPTT; E digunakan untuk menghambat glikolisis pada pemeriksaan glukosa.',
+    pdfPageRef: 'Acuan: R2 (ICSH Coagulation Collection)',
   },
   {
     questionNumber: 3,
-    category: 'clinical_case',
-    topic: 'Kasus 3 — Konsentrasi Hemoglobin Eritrosit (MCHC)',
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 03 | Perbedaan plasma dan serum',
     questionText:
-      'Seorang perempuan berusia 29 tahun datang dengan keluhan lemah dan cepat lelah. Dokter melakukan anamnesis dan menemukan keluhan berlangsung satu bulan. Pemeriksaan fisik menunjukkan pucat ringan. Hasil laboratorium: Hb 9,6 g/dL, Hct 30%, RBC 4,0 juta/µL. Dokter meminta mahasiswa menentukan konsentrasi hemoglobin rata-rata dalam volume eritrosit. Berapakah MCHC pasien?',
+      'Perbedaan paling bermakna antara plasma dan serum untuk kajian hemostasis ialah ...',
     options: {
-      A: '28 g/dL',
-      B: '30 g/dL',
-      C: '32 g/dL',
-      D: '36 g/dL',
-    },
-    correctOption: 'C',
-    scientificExplanation:
-      'MCHC (Mean Corpuscular Hemoglobin Concentration) menilai konsentrasi rata-rata hemoglobin per satuan volume eritrosit pekat (g/dL) dengan membandingkan kadar Hb terhadap Hematokrit.',
-    optionRationales: {
-      A: 'Tidak tepat: 28 g/dL tidak sesuai dengan hasil 960 dibagi 30.',
-      B: 'Tidak tepat: 30 merupakan nilai Hematokrit (30%), bukan hasil perhitungan MCHC.',
-      C: 'Tepat: 32 g/dL diperoleh dari (9,6 × 100) / 30 = 960 / 30 = 32 g/dL (tepat pada batas bawah rentang normal 32–36 g/dL).',
-      D: 'Tidak tepat: 36 g/dL merupakan batas atas rentang normal, bukan hasil perhitungan pasien.',
-    },
-    calculationSteps: 'Rumus: MCHC = (Hb (g/dL) × 100) / Hct (%) = (9,6 × 100) / 30 = 960 / 30 = 32 g/dL.',
-    doctorClinicalExplanation:
-      'Meskipun MCHC berada tepat di batas bawah normal (32 g/dL), MCV pasien adalah (30×10)/4,0 = 75 fL (mikrositik) dan MCH = 24 pg, sehingga menunjukkan transisi menuju anemia mikrositik hipokromik.',
-    patientEducation:
-      'Edukasi pentingnya kepatuhan pemeriksaan lanjutan dan perbaikan pola konsumsi nutrisi kaya zat besi dan protein.',
-    managementPlan:
-      'Konfirmasi morfologi eritrosit pada apusan darah tepi dan pemeriksaan profil besi serum.',
-    pdfPageRef: 'Halaman 23, 39–40',
-  },
-  {
-    questionNumber: 4,
-    category: 'clinical_case',
-    topic: 'Kasus 4 — Interpretasi Gabungan Tiga Indeks Eritrosit',
-    questionText:
-      'Seorang pasien perempuan berusia 32 tahun datang dengan keluhan lemah. Dokter meminta pemeriksaan darah lengkap. Hasil: Hb 8,4 g/dL, Hct 28%, RBC 3,5 juta/µL. Mahasiswa harus menghitung ketiga indeks eritrosit sebelum memberikan interpretasi. Kombinasi hasil yang paling tepat adalah:',
-    options: {
-      A: 'MCV 80 fL; MCH 24 pg; MCHC 30 g/dL',
-      B: 'MCV 70 fL; MCH 30 pg; MCHC 36 g/dL',
-      C: 'MCV 90 fL; MCH 24 pg; MCHC 32 g/dL',
-      D: 'MCV 100 fL; MCH 27 pg; MCHC 36 g/dL',
-    },
-    correctOption: 'A',
-    scientificExplanation:
-      'Perhitungan serentak ketiga indeks eritrosit wajib dilakukan ATLM untuk memberikan gambaran utuh ukuran (MCV), bobot Hb per sel (MCH), dan kepekatan warna Hb per volume eritrosit (MCHC).',
-    optionRationales: {
-      A: 'Tepat: MCV = 280/3,5 = 80 fL; MCH = 84/3,5 = 24 pg; MCHC = 840/28 = 30 g/dL.',
-      B: 'Tidak tepat: Ketiga angka MCV 70, MCH 30, dan MCHC 36 tidak sesuai dengan substitusi rumus.',
-      C: 'Tidak tepat: Hanya MCH 24 pg yang benar; MCV 90 dan MCHC 32 keliru.',
-      D: 'Tidak tepat: Ketiga nilai merupakan angka batas normal umum, bukan hasil perhitungan pasien.',
-    },
-    calculationSteps:
-      'MCV = (28 × 10) / 3,5 = 80 fL | MCH = (8,4 × 10) / 3,5 = 24 pg | MCHC = (8,4 × 100) / 28 = 30 g/dL.',
-    doctorClinicalExplanation:
-      'MCV berada tepat di batas bawah normositik (80 fL), namun MCH (24 pg) dan MCHC (30 g/dL) sudah menurun jelas (hipokromik), mencerminkan gangguan pengisian hemoglobin.',
-    patientEducation:
-      'Penjelasan mengenai arti hasil laboratorium secara menyeluruh dan perlunya investigasi penyebab defisiensi hemoglobin.',
-    managementPlan:
-      'Evaluasi apusan darah tepi (melihat pelebaran central pallor > 1/3 diameter sel) dan pemeriksaan status besi.',
-    pdfPageRef: 'Halaman 23, 38–40',
-  },
-  {
-    questionNumber: 5,
-    category: 'clinical_case',
-    topic: 'Kasus 5 — Makrositosis Berdasarkan MCV',
-    questionText:
-      'Seorang laki-laki berusia 48 tahun datang dengan keluhan kelelahan dan penurunan aktivitas. Dokter menanyakan riwayat penyakit serta obat yang digunakan. Pemeriksaan fisik menunjukkan pucat. CBC: Hb 10,5 g/dL, Hct 36%, RBC 3,2 juta/µL. Dokter meminta mahasiswa menghitung MCV untuk menilai ukuran rata-rata eritrosit. Hasil dan klasifikasi yang tepat adalah:',
-    options: {
-      A: 'MCV 90 fL — normositik',
-      B: 'MCV 100 fL — normositik',
-      C: 'MCV 112,5 fL — makrositik',
-      D: 'MCV 125 fL — makrositik',
-    },
-    correctOption: 'C',
-    scientificExplanation:
-      'Nilai MCV > 100 fL diklasifikasikan sebagai makrositik. Pada pasien ini, penurunan jumlah RBC (3,2 juta/µL) yang lebih tajam dibanding penurunan Hct (36%) menghasilkan volume rata-rata sel yang membesar (112,5 fL).',
-    optionRationales: {
-      A: 'Tidak tepat: 90 fL tidak sesuai dengan pembagian 360 oleh 3,2.',
-      B: 'Tidak tepat: 100 fL adalah batas atas rentang normositik, bukan hasil hitung pasien.',
-      C: 'Tepat: MCV = (36 × 10) / 3,2 = 360 / 3,2 = 112,5 fL (> 100 fL → makrositik).',
-      D: 'Tidak tepat: 125 fL tidak sesuai dengan perhitungan matematis.',
-    },
-    calculationSteps: 'Rumus: MCV = (Hct × 10) / RBC = (36 × 10) / 3,2 = 360 / 3,2 = 112,5 fL (> 100 fL → Makrositik).',
-    doctorClinicalExplanation:
-      'Anemia makrositik (MCV 112,5 fL) mengarahkan kecurigaan klinis pada gangguan sintesis DNA eritroblas akibat defisiensi Vitamin B12 (kobalamin), defisiensi Asam Folat, efek obat kemoterapi/antikonvulsan, atau penyakit hati kronis.',
-    patientEducation:
-      'Edukasi mengenai pentingnya vitamin B12 (produk hewani) dan asam folat (sayuran hijau) dalam pematangan sel darah merah di sumsum tulang.',
-    managementPlan:
-      'Pemeriksaan SADT untuk mencari makrosit oval dan neutrofil hipersegmentasi (>5 lobus), serta pengukuran kadar Vitamin B12 dan Folat serum.',
-    pdfPageRef: 'Halaman 24, 38, dan 40',
-  },
-  {
-    questionNumber: 6,
-    category: 'clinical_case',
-    topic: 'Kasus 6 — Perhitungan MCH pada Pasien dengan Keluhan Pucat',
-    questionText:
-      'Seorang perempuan berusia 41 tahun datang ke dokter dengan keluhan mudah lelah dan berdebar saat beraktivitas. Anamnesis mencakup riwayat menstruasi dan pola makan. Pemeriksaan fisik menemukan konjungtiva pucat. Hasil CBC: Hb 10,8 g/dL, Hct 32,4%, RBC 4,5 juta/µL. Berapakah MCH berdasarkan data tersebut?',
-    options: {
-      A: '20 pg',
-      B: '22 pg',
-      C: '24 pg',
-      D: '27 pg',
-    },
-    correctOption: 'C',
-    scientificExplanation:
-      'MCH dihitung dengan mengalikan Hb (10,8 g/dL) dengan 10 lalu dibagi jumlah RBC (4,5 juta/µL), menghasilkan 24 pg.',
-    optionRationales: {
-      A: 'Tidak tepat: 20 pg tidak sesuai dengan pembagian 108 oleh 4,5.',
-      B: 'Tidak tepat: 22 pg bukan hasil pembagian 108 oleh 4,5.',
-      C: 'Tepat: (10,8 × 10) / 4,5 = 108 / 4,5 = 24 pg.',
-      D: 'Tidak tepat: 27 pg merupakan batas bawah nilai rujukan normal, bukan hasil pasien.',
-    },
-    calculationSteps: 'Rumus: MCH = (10,8 × 10) / 4,5 = 108 / 4,5 = 24 pg.',
-    doctorClinicalExplanation:
-      'Pasien mengalami penurunan Hb (10,8 g/dL) dengan MCH rendah (24 pg) dan MCV rendah ((32,4×10)/4,5 = 72 fL), konsisten dengan gambaran anemia mikrositik.',
-    patientEducation:
-      'Menjelaskan hubungan keluhan berdebar (kompensasi jantung memompa lebih cepat) dengan rendahnya kadar hemoglobin pengangkut oksigen.',
-    managementPlan:
-      'Evaluasi profil besi dan tata laksana kausal sesuai temuan klinis dokter.',
-    pdfPageRef: 'Halaman 23, 39–40',
-  },
-  {
-    questionNumber: 7,
-    category: 'clinical_case',
-    topic: 'Kasus 7 — Evaluasi MCHC Rendah (Hipokromia)',
-    questionText:
-      'Seorang pasien berusia 38 tahun menjalani pemeriksaan karena kelelahan. Dokter melakukan anamnesis mengenai penyakit terdahulu dan kemungkinan kehilangan darah. Pemeriksaan fisik menunjukkan pucat. Hasil laboratorium: Hb 10,2 g/dL, Hct 34%, RBC 3,8 juta/µL. Berapakah MCHC dan interpretasi terhadap konsentrasi hemoglobin eritrosit?',
-    options: {
-      A: '25 g/dL — rendah',
-      B: '30 g/dL — rendah',
-      C: '34 g/dL — normal',
-      D: '38 g/dL — tinggi',
-    },
-    correctOption: 'B',
-    scientificExplanation:
-      'Substitusi Hb 10,2 g/dL dan Hct 34% ke dalam rumus MCHC menghasilkan 30 g/dL. Karena rentang rujukan MCHC adalah 32–36 g/dL, maka nilai 30 g/dL diinterpretasikan rendah (hipokromik).',
-    optionRationales: {
-      A: 'Tidak tepat: 25 g/dL bukan hasil pembagian 1020 oleh 34.',
-      B: 'Tepat: MCHC = (10,2 × 100) / 34 = 1020 / 34 = 30 g/dL (rendah / di bawah 32–36 g/dL).',
-      C: 'Tidak tepat: 34 adalah angka Hematokrit (34%), bukan MCHC.',
-      D: 'Tidak tepat: 38 g/dL tidak sesuai perhitungan dan bernilai tinggi.',
-    },
-    calculationSteps: 'Rumus: MCHC = (Hb × 100) / Hct = (10,2 × 100) / 34 = 1020 / 34 = 30 g/dL (< 32 g/dL → Rendah/Hipokromik).',
-    doctorClinicalExplanation:
-      'Penurunan MCHC (30 g/dL) menunjukkan kepekatan hemoglobin di dalam eritrosit berkurang sehingga sel tampak lebih pucat pada pewarnaan apusan darah tepi.',
-    patientEducation:
-      'Edukasi mengenai pentingnya pemenuhan zat besi dan nutrisi pembentuk hemoglobin.',
-    managementPlan:
-      'Pemeriksaan morfologi darah tepi dan uji status besi serum.',
-    pdfPageRef: 'Halaman 23, 39–40',
-  },
-  {
-    questionNumber: 8,
-    category: 'clinical_case',
-    topic: 'Kasus 8 — MCV pada Pasien dengan RBC Relatif Tinggi',
-    questionText:
-      'Seorang laki-laki berusia 27 tahun datang untuk evaluasi karena hasil skrining menunjukkan Hb rendah. Ia tidak melaporkan perdarahan aktif. Pemeriksaan fisik menunjukkan pucat ringan. Hasil CBC: Hb 11,5 g/dL, Hct 33%, RBC 4,4 juta/µL. Berapakah MCV dan klasifikasi ukuran eritrositnya?',
-    options: {
-      A: '65 fL — mikrositik',
-      B: '75 fL — mikrositik',
-      C: '85 fL — normositik',
-      D: '100 fL — normositik',
-    },
-    correctOption: 'B',
-    scientificExplanation:
-      'Dengan Hct 33% dan RBC 4,4 juta/µL, nilai MCV adalah 330 / 4,4 = 75 fL. Nilai di bawah 80 fL menunjukkan mikrositosis.',
-    optionRationales: {
-      A: 'Tidak tepat: 65 fL tidak sesuai dengan hasil pembagian 330 oleh 4,4.',
-      B: 'Tepat: 75 fL merupakan hasil perhitungan (33 × 10) / 4,4 dan berada di bawah 80 fL (mikrositik).',
-      C: 'Tidak tepat: 85 fL termasuk normositik dan bukan hasil perhitungan pasien.',
-      D: 'Tidak tepat: 100 fL bukan hasil perhitungan pasien.',
-    },
-    calculationSteps: 'Rumus: MCV = (33 × 10) / 4,4 = 330 / 4,4 = 75 fL (< 80 fL → Mikrositik).',
-    doctorClinicalExplanation:
-      'Anemia ringan pada pria dewasa (Hb 11,5 g/dL < 13,0 g/dL) dengan mikrositosis (75 fL) tanpa riwayat perdarahan memerlukan evaluasi banding antara defisiensi besi dan karier thalassemia minor.',
-    patientEducation:
-      'Menjelaskan bahwa ukuran sel darah merah yang kecil dapat disebabkan oleh faktor nutrisi (zat besi) maupun pembawa sifat genetik hemoglobin (thalassemia trait).',
-    managementPlan:
-      'Pemeriksaan ferritin serum terlebih dahulu; bila status besi normal, dilanjutkan analisis Hb (HPLC/elektroforesis Hb).',
-    pdfPageRef: 'Halaman 23, 38, dan 40',
-  },
-  {
-    questionNumber: 9,
-    category: 'clinical_case',
-    topic: 'Kasus 9 — Perhitungan MCH pada Hasil CBC Normal-Bawah',
-    questionText:
-      'Seorang perempuan berusia 34 tahun mengeluhkan kelelahan. Dokter meminta CBC dan menjelaskan bahwa indeks eritrosit membantu menggambarkan karakteristik sel darah merah. Hasil: Hb 12,6 g/dL, Hct 37,8%, RBC 4,2 juta/µL. Berapakah MCH pasien?',
-    options: {
-      A: '24 pg',
-      B: '27 pg',
-      C: '30 pg',
-      D: '33 pg',
-    },
-    correctOption: 'C',
-    scientificExplanation:
-      'MCH dihitung dari (Hb × 10) / RBC = (12,6 × 10) / 4,2 = 126 / 4,2 = 30 pg. Nilai ini berada dalam rentang normal (27–33 pg).',
-    optionRationales: {
-      A: 'Tidak tepat: 24 pg tidak sesuai dengan pembagian 126 oleh 4,2.',
-      B: 'Tidak tepat: 27 pg bukan hasil perhitungan dari data pasien.',
-      C: 'Tepat: 30 pg adalah hasil pembagian 126 oleh 4,2 yang tepat.',
-      D: 'Tidak tepat: 33 pg tidak sesuai dengan data pasien.',
-    },
-    calculationSteps: 'Rumus: MCH = (12,6 × 10) / 4,2 = 126 / 4,2 = 30 pg (Normal: 27–33 pg).',
-    doctorClinicalExplanation:
-      'Kadar Hb (12,6 g/dL), Hct (37,8%), MCV (90 fL), dan MCH (30 pg) pasien seluruhnya berada dalam batas normal untuk perempuan tidak hamil, sehingga keluhan kelelahan perlu dicari penyebab non-anemianya.',
-    patientEducation:
-      'Menyampaikan kabar baik bahwa profil sel darah merah normal, serta menyarankan evaluasi pola tidur, hidrasi, aktivitas fisik, atau fungsi tiroid/metabolik.',
-    managementPlan:
-      'Evaluasi klinis umum tanpa perlu suplementasi besi agresif.',
-    pdfPageRef: 'Halaman 23, 39–40',
-  },
-  {
-    questionNumber: 10,
-    category: 'clinical_case',
-    topic: 'Kasus 10 — Perhitungan MCHC dengan Pembulatan Desimal',
-    questionText:
-      'Seorang pasien perempuan berusia 30 tahun menjalani pemeriksaan darah lengkap. Hasil laboratorium: Hb 12,0 g/dL, Hct 36%, RBC 4,0 juta/µL. Dokter meminta mahasiswa menghitung MCHC dan menjelaskan parameter yang diwakilinya. Hasil MCHC yang benar adalah:',
-    options: {
-      A: '30 g/dL',
-      B: '32 g/dL',
-      C: '33,3 g/dL',
-      D: '36 g/dL',
-    },
-    correctOption: 'C',
-    scientificExplanation:
-      'MCHC = (12,0 × 100) / 36 = 1200 / 36 = 33,33 g/dL, dibulatkan satu angka di belakang koma menjadi 33,3 g/dL (normokromik).',
-    optionRationales: {
-      A: 'Tidak tepat: 30 g/dL adalah nilai MCH (30 pg) jika salah menggunakan rumus, bukan MCHC.',
-      B: 'Tidak tepat: 32 g/dL bukan hasil pembagian 1200 oleh 36.',
-      C: 'Tepat: 33,3 g/dL merupakan hasil pembagian 1200 / 36 yang dibulatkan satu desimal.',
-      D: 'Tidak tepat: 36 adalah angka Hematokrit (36%), bukan MCHC.',
-    },
-    calculationSteps: 'Rumus: MCHC = (12,0 × 100) / 36 = 1200 / 36 = 33,3 g/dL (Normal: 32–36 g/dL).',
-    doctorClinicalExplanation:
-      'Konsentrasi hemoglobin rata-rata di dalam volume eritrosit pasien normal (normokromik, 33,3 g/dL).',
-    patientEducation:
-      'Menjelaskan bahwa warna dan kepekatan hemoglobin di dalam sel darah merah pasien berada pada kisaran sehat.',
-    managementPlan:
-      'Pemeliharaan gaya hidup sehat dan gizi seimbang.',
-    pdfPageRef: 'Halaman 23, 39–40',
-  },
-  {
-    questionNumber: 11,
-    category: 'clinical_case',
-    topic: 'Kasus 11 — Anemia dengan Indeks Normositik Normokromik',
-    questionText:
-      'Seorang laki-laki berusia 45 tahun mengeluhkan lelah. Dokter melakukan anamnesis dan pemeriksaan fisik, kemudian meminta CBC. Hasil: Hb 9,0 g/dL, Hct 27%, RBC 3,0 juta/µL. Mahasiswa diminta menghitung MCV, MCH, dan MCHC. Kombinasi interpretasi yang paling tepat adalah:',
-    options: {
-      A: 'MCV 90 fL, MCH 30 pg, MCHC 33,3 g/dL — normositik normokromik',
-      B: 'MCV 70 fL, MCH 20 pg, MCHC 25 g/dL — mikrositik hipokromik',
-      C: 'MCV 110 fL, MCH 35 pg, MCHC 40 g/dL — makrositik hiperkromik',
-      D: 'MCV 80 fL, MCH 27 pg, MCHC 36 g/dL — seluruhnya rendah',
-    },
-    correctOption: 'A',
-    scientificExplanation:
-      'Ketika Hb, Hct, dan RBC menurun secara proporsional, ketiga indeks eritrosit tetap berada di rentang normal: MCV = 270/3 = 90 fL (normositik), MCH = 90/3 = 30 pg (normal), dan MCHC = 900/27 = 33,3 g/dL (normokromik).',
-    optionRationales: {
-      A: 'Tepat: Ketiga nilai sesuai perhitungan matematis dan diklasifikasikan sebagai normositik normokromik.',
-      B: 'Tidak tepat: Angka tidak sesuai perhitungan data pasien.',
-      C: 'Tidak tepat: Angka tidak sesuai perhitungan dan MCHC 40 g/dL tidak akurat.',
-      D: 'Tidak tepat: Hasil hitung yang benar adalah MCV 90 fL, MCH 30 pg, MCHC 33,3 g/dL.',
-    },
-    calculationSteps:
-      'MCV = (27 × 10)/3,0 = 90 fL | MCH = (9,0 × 10)/3,0 = 30 pg | MCHC = (9,0 × 100)/27 = 33,3 g/dL.',
-    doctorClinicalExplanation:
-      'Anemia normositik normokromik (Hb 9,0 g/dL) pada laki-laki dewasa memerlukan evaluasi fungsi ginjal (ureum/kreatinin untuk menilai kemungkinan defisiensi EPO pada CKD), penyakit inflamasi kronis, atau perdarahan akut.',
-    patientEducation:
-      'Menjelaskan bahwa ukuran dan kepekatan tiap sel darah merah normal, namun jumlah total sel yang diproduksi atau beredar di tubuh berkurang.',
-    managementPlan:
-      'Pemeriksaan hitung Retikulosit, fungsi ginjal (eGFR), dan evaluasi penyakit kronis.',
-    pdfPageRef: 'Halaman 23, 38–41',
-  },
-  {
-    questionNumber: 12,
-    category: 'clinical_case',
-    topic: 'Kasus 12 — Ambang Hemoglobin WHO 2024 pada Pria Dewasa',
-    questionText:
-      'Seorang laki-laki berusia 32 tahun datang untuk pemeriksaan kesehatan. Ia mengeluhkan mudah lelah tetapi tidak mengalami perdarahan yang diketahui. Pemeriksaan fisik menunjukkan keadaan umum stabil. Hasil Hb 12,7 g/dL. Materi mencantumkan ambang WHO 2024 untuk anemia pada pria dewasa sebesar Hb <13,0 g/dL. Interpretasi paling tepat adalah:',
-    options: {
-      A: 'Tidak memenuhi ambang anemia karena Hb lebih dari 12,0 g/dL',
-      B: 'Memenuhi ambang anemia berdasarkan Hb; penyebab belum dapat ditentukan dari Hb saja',
-      C: 'Pasti mengalami anemia defisiensi besi',
-      D: 'Pasti mengalami leukemia',
-    },
-    correctOption: 'B',
-    scientificExplanation:
-      'Menurut pedoman WHO 2024 pada materi PDF, batas (cutoff) anemia untuk pria dewasa (≥15 tahun) adalah Hb < 13,0 g/dL. Kadar Hb 12,7 g/dL sudah memenuhi kriteria anemia ringan secara laboratorium, namun satu parameter Hb saja tidak dapat memastikan etiologi/penyebabnya.',
-    optionRationales: {
-      A: 'Tidak tepat: Ambang 12,0 g/dL adalah batas untuk perempuan tidak hamil, bukan pria dewasa.',
-      B: 'Tepat: Hb 12,7 g/dL berada di bawah ambang 13,0 g/dL untuk pria dewasa, dan penentuan penyebab memerlukan indeks eritrosit serta pemeriksaan penunjang.',
-      C: 'Tidak tepat: Defisiensi besi tidak boleh ditegakkan hanya dari nilai Hb tanpa MCV dan ferritin.',
-      D: 'Tidak tepat: Hb rendah semata tidak cukup untuk mendiagnosis leukemia.',
-    },
-    doctorClinicalExplanation:
-      'Dokter menjelaskan bahwa pada pria dewasa karena pengaruh hormon testosteron yang menstimulasi eritropoietin, batas normal Hb lebih tinggi (≥13,0 g/dL) dibanding wanita.',
-    patientEducation:
-      'Menjelaskan bahwa penurunan Hb sedikit di bawah 13,0 g/dL adalah sinyal awal yang perlu dievaluasi pola makan dan indeks sel darah merahnya.',
-    managementPlan:
-      'Melengkapi pemeriksaan CBC lengkap (MCV, MCH, MCHC, RDW) dan evaluasi nutrisi.',
-    pdfPageRef: 'Halaman 41',
-  },
-  {
-    questionNumber: 13,
-    category: 'clinical_case',
-    topic: 'Kasus 13 — Ambang Hemoglobin WHO 2024 pada Perempuan Tidak Hamil',
-    questionText:
-      'Seorang perempuan berusia 28 tahun yang tidak sedang hamil datang dengan keluhan lemah. Dokter menanyakan riwayat menstruasi, pola makan, dan penyakit terdahulu. Pemeriksaan fisik menemukan konjungtiva agak pucat. Hb pasien 11,7 g/dL. Berdasarkan ambang WHO 2024 yang dicantumkan dalam materi untuk perempuan tidak hamil, kesimpulan paling tepat adalah:',
-    options: {
-      A: 'Tidak memenuhi ambang anemia karena Hb masih di atas 10,0 g/dL',
-      B: 'Memenuhi ambang anemia berdasarkan Hb <12,0 g/dL; etiologi perlu dievaluasi',
-      C: 'Pasti mengalami anemia makrositik',
-      D: 'Pasti mengalami gangguan koagulasi',
-    },
-    correctOption: 'B',
-    scientificExplanation:
-      'Ambang WHO 2024 untuk perempuan dewasa tidak hamil adalah Hb < 12,0 g/dL. Nilai Hb 11,7 g/dL berada di bawah ambang tersebut sehingga dikategorikan anemia, namun klasifikasi morfologi dan etiologi membutuhkan data MCV, MCH, MCHC, serta status besi.',
-    optionRationales: {
-      A: 'Tidak tepat: Ambang untuk perempuan tidak hamil adalah 12,0 g/dL, bukan 10,0 g/dL.',
-      B: 'Tepat: Sesuai ambang Hb < 12,0 g/dL pada materi dan secara ilmiah tidak melampaui bukti.',
-      C: 'Tidak tepat: Klasifikasi makrositik memerlukan perhitungan MCV (>100 fL).',
-      D: 'Tidak tepat: Kadar Hb tidak mengukur fungsi faktor koagulasi darah.',
-    },
-    doctorClinicalExplanation:
-      'Pasien mengalami anemia ringan (Hb 11,7 g/dL) yang memerlukan penelusuran indeks eritrosit dan riwayat siklus menstruasi.',
-    patientEducation:
-      'Edukasi mengenai kebutuhan zat besi harian pada perempuan usia subur untuk menggantikan kehilangan darah saat menstruasi.',
-    managementPlan:
-      'Pemeriksaan indeks eritrosit dan ferritin serum.',
-    pdfPageRef: 'Halaman 41',
-  },
-  {
-    questionNumber: 14,
-    category: 'clinical_case',
-    topic: 'Kasus 14 — Ambang Anemia pada Kehamilan Trimester II (WHO 2024)',
-    questionText:
-      'Seorang perempuan hamil trimester II berusia 26 tahun datang untuk pemeriksaan antenatal. Ia mengeluhkan mudah lelah. Dokter melakukan anamnesis dan pemeriksaan fisik, lalu meminta CBC. Hb pasien 10,3 g/dL. Materi mencantumkan ambang anemia trimester II sebesar Hb <10,5 g/dL. Interpretasi yang tepat adalah:',
-    options: {
-      A: 'Tidak anemia karena Hb di atas 10,0 g/dL',
-      B: 'Memenuhi ambang anemia trimester II berdasarkan Hb; perlu evaluasi penyebab',
-      C: 'Pasti mengalami anemia defisiensi besi',
-      D: 'Pasti mengalami anemia makrositik',
-    },
-    correctOption: 'B',
-    scientificExplanation:
-      'Pada kehamilan trimester II terjadi hemodilusi fisiologis (peningkatan volume plasma lebih besar dibanding peningkatan massa eritrosit), sehingga ambang anemia WHO 2024 disesuaikan menjadi Hb < 10,5 g/dL (sedangkan trimester I dan III < 11,0 g/dL). Nilai Hb 10,3 g/dL berada di bawah 10,5 g/dL.',
-    optionRationales: {
-      A: 'Tidak tepat: Ambang trimester II adalah 10,5 g/dL, bukan 10,0 g/dL.',
-      B: 'Tepat: Hb 10,3 g/dL memenuhi kriteria anemia kehamilan trimester II (<10,5 g/dL) dan memerlukan evaluasi penyebab.',
-      C: 'Tidak tepat: Meskipun defisiensi besi dan folat sering terjadi pada kehamilan, Hb saja belum memastikan etiologi.',
-      D: 'Tidak tepat: MCV diperlukan untuk menentukan ada tidaknya makrositosis.',
-    },
-    doctorClinicalExplanation:
-      'Dokter menjelaskan bahwa bahkan dengan memperhitungkan pengenceran darah fisiologis trimester II, Hb 10,3 g/dL tetap tergolong anemia yang harus ditangani agar pertumbuhan janin optimal.',
-    patientEducation:
-      'Edukasi kepatuhan konsumsi tablet tambah darah (zat besi dan asam folat) selama masa kehamilan serta nutrisi tinggi protein.',
-    managementPlan:
-      'Evaluasi indeks eritrosit, pemberian suplementasi besi-folat antenatal sesuai pedoman dokter kebidanan, dan pemantauan Hb berkala.',
-    pdfPageRef: 'Halaman 41',
-  },
-  {
-    questionNumber: 15,
-    category: 'clinical_case',
-    topic: 'Kasus 15 — Trombositopenia dan Gangguan Hemostasis Primer',
-    questionText:
-      'Seorang pasien berusia 22 tahun datang dengan keluhan petekie pada tungkai dan gusi mudah berdarah. Dokter melakukan anamnesis mengenai perdarahan, obat, dan riwayat penyakit. Pemeriksaan fisik menemukan petekie dan perdarahan gusi. Hasil CBC: trombosit 48.000/µL, Hb 12,5 g/dL, leukosit 7.500/µL. Komponen yang paling langsung terganggu dalam pembentukan sumbat awal hemostasis adalah:',
-    options: {
-      A: 'Albumin',
-      B: 'Eritrosit',
-      C: 'Trombosit',
-      D: 'Limfosit B',
-    },
-    correctOption: 'C',
-    scientificExplanation:
-      'Trombosit (normal 150.000–400.000/µL atau 150.000–450.000/µL) berperan langsung dalam hemostasis primer melalui proses adhesi pada kolagen endotel yang rusak, reaksi pelepasan granula (ADP, tromboksan A2, serotonin), dan agregasi membentuk sumbat trombosit (platelet plug).',
-    optionRationales: {
-      A: 'Tidak tepat: Albumin mempertahankan tekanan osmotik koloid plasma, bukan pembentuk sumbat trombosit.',
-      B: 'Tidak tepat: Eritrosit berfungsi mengangkut oksigen dan karbon dioksida.',
-      C: 'Tepat: Trombosit (48.000/µL, trombositopenia) adalah komponen utama pembentuk sumbat hemostasis primer.',
-      D: 'Tidak tepat: Limfosit B berperan dalam produksi antibodi (imunitas humoral).',
-    },
-    doctorClinicalExplanation:
-      'Penurunan trombosit hingga 48.000/µL menyebabkan kapiler kecil kehilangan perlindungan sumbat trombosit sehingga muncul bintik perdarahan bawah kulit (petekie) dan perdarahan mukosa gusi.',
-    patientEducation:
-      'Edukasi pasien untuk menggunakan sikat gigi berbulu lembut, menghindari aktivitas berisiko benturan/trauma, dan tidak mengonsumsi obat pereda nyeri golongan NSAID/aspirin tanpa instruksi dokter.',
-    managementPlan:
-      'Konfirmasi jumlah trombosit pada Sediaan Apus Darah Tepi (menyingkirkan pseudotrombositopenia akibat clumping EDTA) dan mencari penyebab trombositopenia (infeksi virus seperti dengue atau ITP).',
-    pdfPageRef: 'Halaman 26, 29–35',
-  },
-  {
-    questionNumber: 16,
-    category: 'clinical_case',
-    topic: 'Kasus 16 — Leukositosis dengan Dominasi Neutrofil (Neutrofilia)',
-    questionText:
-      'Seorang pasien berusia 30 tahun datang dengan demam dan luka yang tampak meradang. Dokter menanyakan onset demam dan riwayat luka. Pemeriksaan fisik menemukan area luka kemerahan. CBC menunjukkan leukosit 15.500/µL dan neutrofil 82%. Dokter menjelaskan bahwa neutrofil merupakan bagian penting dari pertahanan awal terhadap bakteri. Fungsi sel yang paling sesuai adalah:',
-    options: {
-      A: 'Menghasilkan antibodi spesifik sebagai sel plasma',
-      B: 'Melakukan fagositosis terhadap bakteri dan sisa sel',
-      C: 'Menghasilkan histamin sebagai mediator alergi utama',
-      D: 'Mengubah fibrinogen menjadi fibrin',
-    },
-    correctOption: 'B',
-    scientificExplanation:
-      'Neutrofil (normal 60–70% dari total leukosit) merupakan granulosit lini pertama yang bermigrasi cepat ke area infeksi (kemotaksis & diapedesis) untuk melakukan fagositosis aktif terhadap bakteri piogenik dan melepaskan enzim lisozim serta defensin.',
-    optionRationales: {
-      A: 'Tidak tepat: Produksi antibodi spesifik oleh sel plasma merupakan fungsi diferensiasi Limfosit B.',
-      B: 'Tepat: Fagositosis bakteri dan sisa sel mati merupakan fungsi utama neutrofil.',
-      C: 'Tidak tepat: Pelepasan histamin sebagai mediator alergi merupakan fungsi Basofil dan sel mast.',
-      D: 'Tidak tepat: Pengubahan fibrinogen menjadi fibrin dilakukan oleh enzim Trombin pada kaskade koagulasi.',
-    },
-    doctorClinicalExplanation:
-      'Leukositosis (15.500/µL; normal 5.000–10.000/µL) disertai neutrofilia (82%) menunjukkan respons imun bawaan yang aktif terhadap infeksi bakteri akut pada jaringan luka.',
-    patientEducation:
-      'Edukasi perawatan kebersihan luka secara aseptik dan kepatuhan terapi yang diresepkan dokter.',
-    managementPlan:
-      'Perawatan luka (wound care), evaluasi apusan darah untuk melihat adanya neutrofil batang (shift to the left) atau granula toksik, serta terapi antimikroba sesuai indikasi klinis dokter.',
-    pdfPageRef: 'Halaman 21–24, 27',
-  },
-  {
-    questionNumber: 17,
-    category: 'clinical_case',
-    topic: 'Kasus 17 — Eosinofilia pada Pasien dengan Riwayat Alergi',
-    questionText:
-      'Seorang perempuan berusia 25 tahun mengeluhkan gatal berulang dan memiliki riwayat reaksi alergi. Dokter melakukan anamnesis paparan alergen dan pemeriksaan fisik kulit. Hasil hitung jenis leukosit menunjukkan eosinofil 9%. Total leukosit 9.000/µL. Sel yang mengalami peningkatan dan paling berkaitan dengan parasit serta reaksi alergi adalah:',
-    options: {
-      A: 'Neutrofil',
-      B: 'Basofil',
-      C: 'Eosinofil',
-      D: 'Monosit',
-    },
-    correctOption: 'C',
-    scientificExplanation:
-      'Eosinofil (normal 2–4% dari total leukosit) memiliki granula merah-oranye besar yang mengandung histaminase (meredam mediator inflamasi alergi) dan protein sitotoksik terhadap parasit cacing (helmintiasis). Persentase 9% menunjukkan eosinofilia.',
-    optionRationales: {
-      A: 'Tidak tepat: Neutrofil berperan utama dalam fagositosis bakteri akut.',
-      B: 'Tidak tepat: Basofil melepaskan histamin dan heparin, sedangkan sel yang meningkat 9% pada kasus ini adalah eosinofil.',
-      C: 'Tepat: Eosinofil berkaitan erat dengan reaksi hipersensitivitas/alergi dan infeksi parasit.',
-      D: 'Tidak tepat: Monosit berdiferensiasi menjadi makrofag untuk fagositosis kronis.',
-    },
-    doctorClinicalExplanation:
-      'Peningkatan eosinofil (9%) mendukung adanya proses alergi aktif (seperti dermatitis atopik/urtikaria) atau kemungkinan investasi parasit yang perlu dikonfirmasi secara klinis.',
-    patientEducation:
-      'Edukasi untuk mengidentifikasi dan menghindari pemicu alergen (debu, makanan tertentu, bulu hewan) serta menjaga higienitas.',
-    managementPlan:
-      'Tata laksana simtomatik alergi oleh dokter dan pemeriksaan feses rutin bila dicurigai infeksi kecacingan.',
-    pdfPageRef: 'Halaman 19, 24, dan 27',
-  },
-  {
-    questionNumber: 18,
-    category: 'clinical_case',
-    topic: 'Kasus 18 — Identifikasi Morfologi dan Fungsi Basofil',
-    questionText:
-      'Pasien dengan riwayat reaksi alergi menjalani pemeriksaan darah lengkap. Hasil hitung jenis menunjukkan basofil 2%. Pada diskusi kasus, dokter meminta mahasiswa menghubungkan morfologi dan fungsi basofil. Pernyataan yang paling tepat adalah:',
-    options: {
-      A: 'Basofil memiliki granula besar berwarna biru dan berkaitan dengan pelepasan histamin',
-      B: 'Basofil merupakan fragmen megakariosit tanpa inti',
-      C: 'Basofil merupakan sel bikonkaf yang mengandung hemoglobin',
-      D: 'Basofil berdiferensiasi menjadi eritrosit matur',
-    },
-    correctOption: 'A',
-    scientificExplanation:
-      'Basofil adalah granulosit paling langka (0,5–1% dari total leukosit) yang dicirikan oleh granula sitoplasma bulat besar berwarna biru-ungu tua (basofilik) yang sering menutupi inti, serta berfungsi melepaskan histamin, heparin, dan serotonin pada reaksi alergi/inflamasi.',
-    optionRationales: {
-      A: 'Tepat: Sesuai ciri morfologi granula biru-ungu basofil dan fungsi pelepasan histamin.',
-      B: 'Tidak tepat: Fragmen sitoplasma megakariosit tanpa inti adalah Trombosit.',
-      C: 'Tidak tepat: Sel cakram bikonkaf pengandung hemoglobin adalah Eritrosit.',
-      D: 'Tidak tepat: Basofil berasal dari jalur mieloid granulositik dan tidak berubah menjadi eritrosit.',
-    },
-    doctorClinicalExplanation:
-      'Basofil 2% sedikit meningkat di atas rentang normal (0,5–1%) dan berkorelasi dengan keterlibatan reseptor IgE serta degranulasi histamin pada reaksi alergi pasien.',
-    patientEducation:
-      'Menjelaskan peran sel basofil dan histamin dalam memicu gejala gatal serta kemerahan saat tubuh terpapar alergen.',
-    managementPlan:
-      'Korelasi klinis dengan manifestasi alergi dan pemantauan hitung jenis leukosit.',
-    pdfPageRef: 'Halaman 18, 24, dan 27',
-  },
-  {
-    questionNumber: 19,
-    category: 'clinical_case',
-    topic: 'Kasus 19 — Pemeriksaan Retikulosit dan Respons Sumsum Tulang',
-    questionText:
-      'Seorang pasien dengan Hb rendah menjalani pemeriksaan lanjutan. Dokter menjelaskan bahwa jumlah retikulosit dapat membantu menilai respons produksi eritrosit oleh sumsum tulang. Mahasiswa diminta menjelaskan tujuan pemeriksaan retikulosit dalam konteks anemia. Pernyataan yang paling tepat adalah:',
-    options: {
-      A: 'Menilai variasi ukuran eritrosit secara langsung',
-      B: 'Menilai respons produksi eritrosit oleh sumsum tulang',
-      C: 'Mengukur konsentrasi fibrinogen plasma',
-      D: 'Menentukan antigen ABO pada permukaan eritrosit',
-    },
-    correctOption: 'B',
-    scientificExplanation:
-      'Retikulosit adalah eritrosit muda yang baru dilepaskan sumsum tulang ke darah tepi (masih menyisakan RNA ribosom selama 1–2 hari). Hitung retikulosit (normal 0,5–1,5% atau 0,5–2,5%) mencerminkan secara langsung kecepatan dan efektivitas regenerasi eritropoiesis di sumsum tulang merah.',
-    optionRationales: {
-      A: 'Tidak tepat: Variasi ukuran eritrosit (anisositosis) diukur menggunakan parameter RDW (Red Cell Distribution Width).',
-      B: 'Tepat: Retikulosit merupakan indikator langsung respons produksi eritrosit oleh sumsum tulang terhadap kondisi anemia/hipoksia.',
-      C: 'Tidak tepat: Konsentrasi fibrinogen diukur pada pemeriksaan koagulasi plasma.',
-      D: 'Tidak tepat: Antigen ABO ditentukan melalui pemeriksaan imunohematologi golongan darah.',
-    },
-    doctorClinicalExplanation:
-      'Jika pasien anemia memiliki retikulosit tinggi (retikulositosis), berarti sumsum tulang merespons secara aktif (misal pasca-perdarahan akut atau anemia hemolitik). Jika retikulosit rendah, berarti terdapat gangguan produksi di sumsum tulang (misal anemia aplastik atau defisiensi bahan baku besi/B12).',
-    patientEducation:
-      'Menjelaskan bahwa tes retikulosit ibarat memeriksa "pabrik sel darah merah" di sumsum tulang apakah bekerja aktif mencetak sel baru atau sedang melambat.',
-    managementPlan:
-      'Menggunakan nilai retikulosit untuk memandu algoritma diagnostik anemia hipoproliferatif vs hiperproliferatif.',
-    pdfPageRef: 'Halaman 17 dan 38',
-  },
-  {
-    questionNumber: 20,
-    category: 'clinical_case',
-    topic: 'Kasus 20 — Interpretasi Golongan Darah ABO dan Rhesus',
-    questionText:
-      'Seorang pasien akan menjalani pemeriksaan golongan darah sebelum tindakan medis. Pada uji forward grouping, reaksi dengan anti-A positif dan anti-B negatif. Pemeriksaan antigen D menunjukkan hasil negatif. Dokter menjelaskan bahwa golongan ABO ditentukan oleh antigen pada permukaan eritrosit dan Rh negatif berarti antigen D tidak terdeteksi. Interpretasi yang tepat adalah:',
-    options: {
-      A: 'A Rh positif',
-      B: 'B Rh negatif',
-      C: 'AB Rh negatif',
-      D: 'A Rh negatif',
+      A: 'Serum mempertahankan fibrinogen dalam kadar sama dengan plasma',
+      B: 'Plasma tidak mengandung protein sama sekali',
+      C: 'Serum mengandung lebih banyak eritrosit dibanding plasma',
+      D: 'Plasma mengandung faktor koagulasi termasuk fibrinogen, sedangkan serum diperoleh setelah pembekuan',
+      E: 'Keduanya hanya dibedakan oleh warna tabung',
     },
     correctOption: 'D',
     scientificExplanation:
-      'Aglutinasi positif pada reagen antisera Anti-A menunjukkan adanya Antigen A pada membran eritrosit, sedangkan negatif pada Anti-B menunjukkan tidak adanya Antigen B (Golongan A). Hasil negatif pada antisera Anti-D menunjukkan tidak terdeteksinya antigen D Rhesus (Rh negatif).',
-    optionRationales: {
-      A: 'Tidak tepat: Golongan A benar, tetapi hasil antigen D negatif berarti Rh negatif, bukan Rh positif.',
-      B: 'Tidak tepat: Reaksi Anti-B negatif dan Anti-A positif menunjukkan golongan A, bukan B.',
-      C: 'Tidak tepat: Golongan AB hanya terjadi jika reaksi Anti-A dan Anti-B keduanya positif.',
-      D: 'Tepat: Reaksi Anti-A (+), Anti-B (-), dan Anti-D (-) menetapkan golongan darah A Rh negatif.',
-    },
+      'Plasma diperoleh dengan pemisahan darah berantikoagulan sehingga masih memiliki fibrinogen. Serum merupakan cairan setelah darah mengalami pembekuan; fibrinogen telah banyak digunakan pada pembentukan bekuan. Karena itu serum tidak dipakai untuk PT dan aPTT.',
+    atlmProcedureAndDecision:
+      'ATLM wajib memilih plasma sitrat (bukan serum) untuk seluruh pemeriksaan fungsi faktor pembekuan darah dan kadar fibrinogen.',
     doctorClinicalExplanation:
-      'Pasien bergolongan darah A Rh negatif memiliki Antigen A di eritrosit dan antibodi Anti-B di plasma, serta tidak memiliki antigen Rh (D). Status Rh negatif sangat penting diperhatikan dalam penyediaan komponen darah dan kehamilan.',
+      'Keberadaan fibrinogen utuh di dalam plasma merupakan syarat mutlak untuk menilai pembentukan jaring fibrin akhir pada kaskade koagulasi.',
     patientEducation:
-      'Memberikan kartu identitas golongan darah kepada pasien dan menjelaskan bahwa golongan darah Rh negatif cukup jarang di populasi Indonesia sehingga perlu dicatat dalam rekam medis.',
-    managementPlan:
-      'Melakukan konfirmasi reverse/serum grouping dan uji silang serasi (crossmatch) di Bank Darah bila diperlukan transfusi.',
-    pdfPageRef: 'Halaman 35–36, 42–45',
+      'Menjelaskan perbedaan komponen cair darah sebelum dan sesudah proses pembekuan.',
+    whyOthersWrong:
+      'A salah karena fibrinogen habis terpakai menjadi fibrin saat darah membeku menjadi serum; B salah karena plasma mengandung ~7% protein (albumin, globulin, fibrinogen); C dan E tidak tepat secara ilmiah.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 7 & 34)',
+  },
+  {
+    questionNumber: 4,
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 04 | Lapisan buffy coat',
+    questionText:
+      'Setelah sentrifugasi darah berantikoagulan, lapisan buffy coat terutama mengandung ...',
+    options: {
+      A: 'Leukosit dan trombosit',
+      B: 'Hanya albumin',
+      C: 'Hanya retikulosit',
+      D: 'Fibrin yang telah menggumpal',
+      E: 'Hanya eritrosit matur',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      'Buffy coat terletak di antara plasma dan lapisan eritrosit serta kaya leukosit dan trombosit. Fraksi ini biasanya kurang dari 1% volume darah.',
+    atlmProcedureAndDecision:
+      'Saat mengamati tabung darah pasca-sentrifugasi, ATLM mengidentifikasi plasma di bagian atas (~55%), buffy coat tipis di tengah (<1%), dan eritrosit pekat di bagian bawah (~45%).',
+    doctorClinicalExplanation:
+      'Ketebalan buffy coat yang meningkat mencolok secara makroskopis dapat menjadi petunjuk awal adanya leukositosis ekstrem atau trombositosis.',
+    patientEducation:
+      'Menjelaskan bahwa darah tersusun atas bagian cair (plasma), sel darah merah, serta lapisan tipis sel darah putih dan keping darah.',
+    whyOthersWrong:
+      'B berada di lapisan plasma atas; C dan E berada di lapisan eritrosit bawah; D tidak terbentuk karena sampel diberi antikoagulan.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 5)',
+  },
+  {
+    questionNumber: 5,
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 05 | Morfologi granulosit',
+    questionText:
+      'Pada apusan darah tepi berpewarnaan Romanowsky, sel dengan inti bilobus dan granula jingga kemerahan menonjol paling mungkin merupakan ...',
+    options: {
+      A: 'Basofil',
+      B: 'Limfosit',
+      C: 'Neutrofil batang',
+      D: 'Monosit',
+      E: 'Eosinofil',
+    },
+    correctOption: 'E',
+    scientificExplanation:
+      'Eosinofil memiliki inti lazimnya bilobus dan granula sitoplasma besar yang berwarna jingga-merah. Basofil mempunyai granula gelap, neutrofil inti bersegmen dengan granula halus, dan monosit berinti berlekuk.',
+    atlmProcedureAndDecision:
+      'ATLM mengidentifikasi eosinofil pada hitung jenis leukosit melalui ciri khas granula kasar seragam berwarna merah-jingga terang yang mengikat zat warna asam (eosin) dan tidak menutupi inti.',
+    doctorClinicalExplanation:
+      'Peningkatan proporsi eosinofil (eosinofilia) berkorelasi dengan respons terhadap infeksi parasit (helmintiasis) dan reaksi hipersensitivitas/alergi.',
+    patientEducation:
+      'Menjelaskan fungsi sel eosinofil sebagai bagian dari sistem pertahanan tubuh terhadap alergi dan parasit.',
+    whyOthersWrong:
+      'A bergranula biru-ungu gelap yang menutupi inti; B agranulosit berinti bulat padat; C berinti seperti pita/huruf C atau U dengan granula halus netral; D agranulosit besar berinti ginjal.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 27); R1',
+  },
+  {
+    questionNumber: 6,
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 06 | Pewarnaan retikulosit',
+    questionText:
+      'Prinsip pemeriksaan retikulosit manual untuk memperlihatkan sisa RNA eritrosit muda adalah penggunaan ...',
+    options: {
+      A: 'Pewarnaan Gram',
+      B: 'Pewarnaan supravital seperti new methylene blue',
+      C: 'Uji antigen D',
+      D: 'Pewarnaan Ziehl-Neelsen',
+      E: 'Pewarnaan khusus faktor VIII',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      'Retikulosit masih menyimpan RNA residual yang membentuk gambaran jala saat diwarnai secara supravital. Hitung retikulosit membantu menilai aktivitas eritropoiesis; tidak sama dengan sekadar menghitung eritrosit berinti pada apusan rutin.',
+    atlmProcedureAndDecision:
+      'ATLM mencampurkan darah segar dengan larutan supravital New Methylene Blue atau Brilliant Cresyl Blue sebelum sel difiksasi agar RNA ribosom terpresipitasi menjadi filamen biru gelap.',
+    doctorClinicalExplanation:
+      'Persentase dan jumlah absolut retikulosit digunakan dokter untuk membedakan anemia hiperproliferatif (hemolisis/perdarahan akut) dari anemia hipoproliferatif.',
+    patientEducation:
+      'Menjelaskan bahwa pemeriksaan retikulosit bertujuan melihat kemampuan sumsum tulang memproduksi sel darah merah muda.',
+    whyOthersWrong:
+      'A untuk bakteri; C untuk golongan darah Rhesus; D untuk basil tahan asam (Mycobacterium); E bukan metode pewarnaan retikulosit.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 17); R1',
+  },
+  {
+    questionNumber: 7,
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 07 | Hasil CBC dan mekanisme ukur',
+    questionText:
+      'Pernyataan yang paling tepat mengenai hematology analyzer modern adalah ...',
+    options: {
+      A: 'Semua parameter CBC selalu dihitung langsung tanpa rumus',
+      B: 'Hasil flag alat selalu merupakan diagnosis akhir',
+      C: 'Hb, jumlah eritrosit, dan hematokrit harus dibaca bersama karena sebagian indeks dihitung dari parameter lain',
+      D: 'MCHC ditentukan hanya dari jumlah limfosit',
+      E: 'Apusan darah tidak lagi diperlukan ketika terdapat flag blast',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      'Parameter CBC saling terkait. Hb umumnya diukur secara fotometrik dengan metode yang bergantung alat, sedangkan jumlah dan karakteristik sel dihitung dengan teknologi impedansi atau optik. MCH, MCV dan MCHC saling terkait sehingga ketidaksesuaian perlu ditelaah. Flag tidak menggantikan konfirmasi.',
+    atlmProcedureAndDecision:
+      'ATLM wajib mengevaluasi konsistensi antardata (Hb, Hct, RBC, MCV, MCH, MCHC), membaca histogram/scattergram, dan menindaklanjuti setiap flag alat dengan telaah apusan darah tepi.',
+    doctorClinicalExplanation:
+      'Kombinasi parameter terukur dan terhitung pada CBC memberikan gambaran utuh kuantitas sekaligus morfologi sel darah.',
+    patientEducation:
+      'Menjelaskan mengapa pemeriksaan darah otomatis terkadang memerlukan konfirmasi mikroskop oleh petugas laboratorium.',
+    whyOthersWrong:
+      'A salah karena MCH dan MCHC dihitung dari rumus; B dan E salah karena flag alat wajib dikonfirmasi secara mikroskopis; D salah karena MCHC dihitung dari Hb dan Hct.',
+    pdfPageRef: 'Acuan: R1 (Rodak’s Hematology)',
+  },
+  {
+    questionNumber: 8,
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 08 | Regulasi eritropoiesis',
+    questionText:
+      'Penurunan oksigen jaringan terutama merangsang produksi eritropoietin oleh organ ...',
+    options: {
+      A: 'Ginjal',
+      B: 'Pankreas',
+      C: 'Limpa',
+      D: 'Nodus limfa',
+      E: 'Lambung',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      'Ginjal memproduksi sebagian besar eritropoietin pada orang dewasa sebagai respons terhadap hipoksia. Hormon ini merangsang pembentukan eritrosit di sumsum tulang, tetapi produksi tetap membutuhkan besi, folat, dan vitamin B12 yang cukup.',
+    atlmProcedureAndDecision:
+      'Saat menemukan anemia normositik normokromik dengan retikulosit rendah pada pasien gangguan fungsi ginjal, ATLM memahami kaitan patofisiologi defisiensi EPO.',
+    doctorClinicalExplanation:
+      'Kerusakan parenkim ginjal pada Penyakit Ginjal Kronis (CKD) menurunkan sintesis EPO sehingga menyebabkan anemia renal.',
+    patientEducation:
+      'Menjelaskan peran ginjal dalam menghasilkan hormon pemicu pembentukan sel darah merah.',
+    whyOthersWrong:
+      'B mengatur glukosa (insulin/glukagon) dan enzim pencernaan; C menghancurkan eritrosit tua dan fungsi imun; D organ limfoid; E menghasilkan faktor intrinsik untuk absorbsi B12, bukan EPO.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 18)',
+  },
+  {
+    questionNumber: 9,
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 09 | Fragmen eritrosit',
+    questionText: 'Pada apusan darah tepi, schistocyte adalah ...',
+    options: {
+      A: 'Eritrosit yang memiliki inti',
+      B: 'Eritrosit berbentuk sabit akibat HbS yang selalu normal',
+      C: 'Eritrosit berukuran besar dengan inti hiperlobus',
+      D: 'Fragmen eritrosit akibat kerusakan mekanis yang dapat berkaitan dengan mikroangiopati trombotik',
+      E: 'Sel darah putih dengan granula toksik',
+    },
+    correctOption: 'D',
+    scientificExplanation:
+      'Schistocyte merupakan fragmen eritrosit, misalnya bentuk helmet atau segitiga tidak teratur. Pada konteks klinis dan laboratorium yang sesuai, proporsi lebih dari 1% pada dewasa mencurigakan mikroangiopati trombotik, tetapi bukan diagnosis tunggal.',
+    atlmProcedureAndDecision:
+      'ATLM menghitung persentase schistocyte per 1.000 eritrosit pada apusan darah tepi sesuai pedoman ICSH dan segera melaporkannya bila meningkat pada pasien trombositopenia.',
+    doctorClinicalExplanation:
+      'Temuan schistocyte >1% bersama trombositopenia dan peningkatan LDH mengarahkan evaluasi darurat terhadap TTP, HUS, atau DIC.',
+    patientEducation:
+      'Menjelaskan bahwa bentuk pecahan sel darah merah dipantau untuk menilai keutuhan aliran darah di pembuluh kecil.',
+    whyOthersWrong:
+      'A adalah eritroblas berinti (NRBC); B adalah drepanosit (sickle cell) yang bersifat patologis; C mencampurkan makrosit dan neutrofil; E adalah perubahan reaktif neutrofil.',
+    pdfPageRef: 'Acuan: R3 (ICSH Schistocyte Guideline)',
+  },
+  {
+    questionNumber: 10,
+    sectionCode: 'A',
+    category: 'theory',
+    topic: 'SOAL 10 | Batas kewenangan ATLM',
+    questionText:
+      'Saat ATLM menemukan hasil trombosit yang memenuhi kriteria nilai kritis setelah verifikasi, tindakan profesional yang paling tepat adalah ...',
+    options: {
+      A: 'Meresepkan transfusi trombosit secara mandiri',
+      B: 'Mengubah hasil agar tidak menimbulkan kepanikan',
+      C: 'Menunggu sampai pemeriksaan rutin keesokan hari',
+      D: 'Menyuruh pasien menghentikan seluruh obat tanpa konsultasi',
+      E: 'Melaporkan dan mendokumentasikan hasil kritis kepada dokter/unit terkait sesuai SOP, serta menyampaikan keterbatasan pemeriksaan',
+    },
+    correctOption: 'E',
+    scientificExplanation:
+      'ATLM bertanggung jawab atas mutu preanalitik, analitik dan pascaanalitik termasuk komunikasi hasil kritis. Dokter menentukan diagnosis dan terapi berdasarkan konteks pasien. Laporan harus dapat ditelusuri, memuat identitas, waktu, penerima dan konfirmasi komunikasi sesuai SOP.',
+    atlmProcedureAndDecision:
+      'Verifikasi bebas bekuan dan bebas clumping pada apusan, lalu lakukan pelaporan nilai kritis segera (read-back policy) kepada dokter/perawat yang merawat.',
+    doctorClinicalExplanation:
+      'Pelaporan nilai kritis yang cepat dan terverifikasi memungkinkan dokter mengambil keputusan pencegahan perdarahan secara tepat waktu.',
+    patientEducation:
+      'Menginformasikan bahwa hasil laboratorium telah diteruskan secara prioritas kepada dokter penanggung jawab.',
+    whyOthersWrong:
+      'A dan D melampaui batas kewenangan klinis ATLM; B melanggar integritas data laboratorium; C membahayakan keselamatan pasien.',
+    pdfPageRef: 'Acuan: R1 (Rodak’s Hematology)',
+  },
+
+  // ===========================================================================
+  // BAGIAN B: 15 SOAL GABUNGAN RINGAN-SEDANG (NOMOR 11 - 25)
+  // Penerapan singkat CBC, hitung diferensial, hemostasis, transfusi dan QC
+  // ===========================================================================
+  {
+    questionNumber: 11,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 11 | Indikasi telaah apusan darah',
+    questionText:
+      'Analyzer menunjukkan pesan "blast/abnormal lymphocyte?" pada CBC. Tindakan laboratorium berikut yang paling tepat ialah ...',
+    options: {
+      A: 'Menandai hasil sebagai leukemia tanpa mikroskopi',
+      B: 'Mengabaikan pesan alat karena Hb normal',
+      C: 'Memeriksa kualitas spesimen dan melakukan telaah apusan darah sesuai kriteria review laboratorium',
+      D: 'Mengganti nilai leukosit dengan nol',
+      E: 'Menambahkan antibiotik ke spesimen',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      'Flag abnormalitas sel adalah pemicu telaah, bukan hasil akhir. ATLM menilai spesimen, membuat/memeriksa apusan, mencatat morfologi dan merujuk temuan mencurigakan kepada penelaah berwenang.',
+    atlmProcedureAndDecision:
+      'Jangan merilis hasil otomatis secara langsung saat muncul flag blast; buat Sediaan Apus Darah Tepi (SADT) dan lakukan telaah mikroskopis.',
+    doctorClinicalExplanation:
+      'Konfirmasi mikroskopis membedakan limfosit reaktif (infeksi virus) dari sel blas sejati (keganasan hematologi).',
+    patientEducation:
+      'Menjelaskan perlunya pemeriksaan mikroskopis lanjutan untuk memastikan bentuk sel darah putih.',
+    whyOthersWrong:
+      'A melompat ke diagnosis tanpa bukti mikroskopis; B mengabaikan peringatan kritis alat; D dan E merusak validitas spesimen dan data.',
+    pdfPageRef: 'Acuan: R1',
+  },
+  {
+    questionNumber: 12,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 12 | MCV dan morfologi eritrosit',
+    questionText:
+      'CBC menunjukkan MCV 71 fL dan MCHC 29 g/dL. Deskripsi morfologi yang paling sesuai untuk dicari pada apusan adalah ...',
+    options: {
+      A: 'Makrosit normokromik',
+      B: 'Mikrosit hipokromik',
+      C: 'Eritrosit berinti dominan',
+      D: 'Sferosit tanpa pallor dominan pasti',
+      E: 'Eritrosit normal tanpa variasi',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      'MCV rendah menunjukkan volume eritrosit rerata kecil, sedangkan MCHC rendah mendukung hipokromia. Penyebabnya tetap memerlukan integrasi dengan ferritin, RDW, jumlah eritrosit dan riwayat klinis.',
+    atlmProcedureAndDecision:
+      'Pada apusan darah tepi, ATLM mengamati ukuran eritrosit yang lebih kecil dari inti limfosit kecil matur serta pelebaran daerah pucat sentral (central pallor > 1/3 diameter sel).',
+    doctorClinicalExplanation:
+      'Gambaran mikrositik hipokromik mengarahkan evaluasi diagnosis banding pada Anemia Defisiensi Besi, Thalassemia, atau Anemia Penyakit Kronis lanjut.',
+    patientEducation:
+      'Menjelaskan bahwa ukuran sel darah merah tampak lebih kecil dan warnanya lebih pucat karena kurangnya muatan hemoglobin.',
+    whyOthersWrong:
+      'A untuk MCV >100 fL dan MCHC 32–36 g/dL; C tidak ditentukan semata oleh MCV/MCHC rendah; D memiliki MCHC tinggi (>36 g/dL); E untuk MCV 80–100 fL dan MCHC 32–36 g/dL.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 23–24); R1',
+  },
+  {
+    questionNumber: 13,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 13 | Retikulosit pada anemia',
+    questionText:
+      'Hb seorang pasien turun menjadi 8,0 g/dL dan retikulosit relatif hanya 0,3%. Temuan ini paling mendukung ...',
+    options: {
+      A: 'Respons sumsum tulang belum memadai untuk derajat anemia',
+      B: 'Hemolisis berat dengan kompensasi maksimal',
+      C: 'Perdarahan akut yang pasti sudah pulih',
+      D: 'Jumlah trombosit tinggi',
+      E: 'Hiperfungsi limpa yang pasti',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      'Retikulosit rendah pada anemia menandakan respons produksi eritrosit tidak memadai. Interpretasi lebih tepat memakai hitung retikulosit absolut atau indeks produksi yang dikoreksi sesuai kondisi pasien.',
+    atlmProcedureAndDecision:
+      'ATLM memverifikasi hitung retikulosit dan menyertakannya bersama hasil CBC agar dokter dapat menilai status regenerasi eritropoiesis.',
+    doctorClinicalExplanation:
+      'Retikulositopenia (0,3%) pada kondisi Hb 8,0 g/dL menunjukkan anemia hipoproliferatif (misal defisiensi besi/B12/EPO atau kegagalan sumsum tulang).',
+    patientEducation:
+      'Menjelaskan bahwa produksi sel darah merah baru di sumsum tulang saat ini belum meningkat sesuai kebutuhan tubuh.',
+    whyOthersWrong:
+      'B dan C yang berkompensasi baik akan menunjukkan retikulositosis tinggi; D dan E tidak ditentukan dari persentase retikulosit rendah.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 17 & 38); R1',
+  },
+  {
+    questionNumber: 14,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 14 | Hitung absolut neutrofil',
+    questionText:
+      'Leukosit 2.000/uL dengan neutrofil segmen 20% dan batang 5%. Berapa absolute neutrophil count (ANC)?',
+    options: {
+      A: '100/uL',
+      B: '250/uL',
+      C: '400/uL',
+      D: '500/uL',
+      E: '1.000/uL',
+    },
+    correctOption: 'D',
+    scientificExplanation:
+      'ANC = jumlah leukosit x (persen neutrofil segmen + batang)/100 = 2.000 x 25/100 = 500/uL. Nilai ini bermakna neutropenia dan perlu dikaitkan dengan suhu pasien dan kebijakan pelaporan kritis.',
+    atlmProcedureAndDecision:
+      'ATLM menjumlahkan persentase neutrofil segmen (20%) dan neutrofil batang (5%) menjadi 25%, lalu mengalikan dengan total WBC (2.000/µL) = 500/µL.',
+    doctorClinicalExplanation:
+      'Nilai ANC ≤ 500/µL menunjukkan neutropenia berat yang meningkatkan risiko infeksi bakteri dan jamur oportunistik secara signifikan.',
+    patientEducation:
+      'Edukasi kewaspadaan terhadap demam dan menjaga kebersihan diri karena daya tahan sel darah putih sedang rendah.',
+    whyOthersWrong:
+      'A hanya menghitung 5% batang; B, C, dan E tidak sesuai dengan substitusi rumus ANC = 2.000 × (20+5)/100.',
+    calculationSteps:
+      'ANC = Total WBC × (% Segmen + % Batang) / 100 = 2.000 × (20 + 5) / 100 = 2.000 × 0,25 = 500/uL.',
+    pdfPageRef: 'Acuan: R1',
+  },
+  {
+    questionNumber: 15,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 15 | Monosit dalam jaringan',
+    questionText:
+      'Pada pasien infeksi kronis, salah satu fungsi monosit setelah bermigrasi ke jaringan adalah berdiferensiasi menjadi ...',
+    options: {
+      A: 'Eritroblas',
+      B: 'Megakariosit',
+      C: 'Makrofag',
+      D: 'Trombosit',
+      E: 'Retikulosit',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      'Monosit sirkulasi dapat masuk ke jaringan dan berdiferensiasi menjadi makrofag yang memfagositosis serta mendukung presentasi antigen.',
+    atlmProcedureAndDecision:
+      'ATLM mengenali monosit sebagai leukosit terbesar di darah tepi dengan inti berbentuk ginjal/tapal kuda dan sitoplasma biru keabu-abuan.',
+    doctorClinicalExplanation:
+      'Monositosis di darah tepi sering menyertai infeksi intraseluler kronis (seperti TBC) atau fase pemulihan infeksi akut.',
+    patientEducation:
+      'Menjelaskan peran monosit dan makrofag sebagai sel pembersih jaringan dari kuman dan sisa sel mati.',
+    whyOthersWrong:
+      'A dan E merupakan jalur pematangan eritrosit; B dan D merupakan jalur pembentukan keping darah (trombosit).',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 28)',
+  },
+  {
+    questionNumber: 16,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 16 | Membedakan anemia defisiensi besi',
+    questionText:
+      'Pasien anemia mikrositik dengan ferritin 5 ng/mL, CRP normal, RDW meningkat. Pola laboratorium paling menunjang ...',
+    options: {
+      A: 'Defisiensi besi',
+      B: 'Eritrositosis primer',
+      C: 'Trombofilia herediter',
+      D: 'Infeksi virus tanpa anemia',
+      E: 'Hipervitaminosis B12',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      'Ferritin sangat rendah dalam konteks inflamasi yang tidak meningkat mendukung cadangan besi menipis. ATLM melaporkan pola pemeriksaan; penyebab kehilangan besi dan kebutuhan terapi dievaluasi dokter.',
+    atlmProcedureAndDecision:
+      'Pastikan hasil CBC (mikrositik dengan RDW meningkat/anisositosis) serta hasil kimia/imunoasai (ferritin 5 ng/mL dan CRP normal) tervalidasi dengan baik.',
+    doctorClinicalExplanation:
+      'Kadar ferritin <15 ng/mL dengan CRP normal mengonfirmasi secara spesifik Anemia Defisiensi Besi tanpa interferensi reaksi fase akut.',
+    patientEducation:
+      'Menjelaskan bahwa cadangan besi tubuh terkuras sehingga diperlukan evaluasi sumber perdarahan dan pemulihan zat besi oleh dokter.',
+    whyOthersWrong:
+      'B ditandai peningkatan Hb/Hct; C adalah gangguan kecenderungan pembekuan darah; D dan E tidak menyebabkan anemia mikrositik dengan ferritin rendah.',
+    pdfPageRef: 'Acuan: R1; R4 (WHO 2024)',
+  },
+  {
+    questionNumber: 17,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 17 | Pergeseran ke kiri',
+    questionText:
+      'Pada pasien dengan dugaan infeksi bakteri, neutrofil batang meningkat dan terlihat bentuk imatur granulosit. Temuan ini disebut ...',
+    options: {
+      A: 'Retikulositosis',
+      B: 'Target cell',
+      C: 'Pansitopenia',
+      D: 'Aglutinasi eritrosit',
+      E: 'Left shift granulosit',
+    },
+    correctOption: 'E',
+    scientificExplanation:
+      'Left shift menunjukkan peningkatan pelepasan neutrofil yang lebih muda. Temuan dapat terjadi pada inflamasi atau infeksi dan tidak cukup untuk menetapkan penyebab tanpa konteks dan pemeriksaan pendukung.',
+    atlmProcedureAndDecision:
+      'ATLM menghitung secara cermat proporsi neutrofil batang, metamielosit, atau mielosit pada apusan darah tepi serta mencatat adanya granula toksik atau vakuolisasi.',
+    doctorClinicalExplanation:
+      'Pergeseran ke kiri (left shift) menandakan sumsum tulang memobilisasi cadangan granulosit muda secara cepat untuk merespons infeksi/inflamasi akut.',
+    patientEducation:
+      'Menjelaskan bahwa tubuh sedang mengerahkan sel darah putih muda untuk melawan proses infeksi.',
+    whyOthersWrong:
+      'A adalah peningkatan eritrosit muda; B adalah poikilositosis eritrosit (codocyte); C adalah penurunan ketiga lini sel darah; D adalah penggumpalan eritrosit.',
+    pdfPageRef: 'Acuan: M1; R1',
+  },
+  {
+    questionNumber: 18,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 18 | Ambang anemia WHO 2024',
+    questionText:
+      'Wanita 27 tahun, tidak hamil, Hb 11,5 g/dL dan berada pada ketinggian sekitar permukaan laut. Berdasarkan pedoman WHO 2024, hasil ini ...',
+    options: {
+      A: 'Normal karena batas anemia di bawah 10 g/dL',
+      B: 'Mengarah pada anemia karena ambang wanita dewasa tidak hamil adalah Hb <12 g/dL',
+      C: 'Selalu menunjukkan anemia berat',
+      D: 'Menentukan diagnosis leukemia',
+      E: 'Tidak dapat dinilai dari Hb',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      'WHO 2024 menetapkan ambang anemia pada wanita dewasa tidak hamil usia 15-65 tahun di bawah 12 g/dL dalam kondisi acuan. Penilaian klinis dapat mempertimbangkan kehamilan, ketinggian, kebiasaan merokok, dan kondisi lain.',
+    atlmProcedureAndDecision:
+      'ATLM memberikan penanda (flag rendah) sesuai rentang rujukan dewasa perempuan tidak hamil (<12,0 g/dL) dan menyertakan indeks eritrosit lengkap.',
+    doctorClinicalExplanation:
+      'Hb 11,5 g/dL tergolong anemia ringan pada perempuan tidak hamil dan memerlukan evaluasi indeks eritrosit serta status besi.',
+    patientEducation:
+      'Menjelaskan bahwa kadar Hb sedikit di bawah batas normal perempuan dewasa (12,0 g/dL) sehingga perlu dievaluasi pola makan dan siklus menstruasinya.',
+    whyOthersWrong:
+      'A menggunakan ambang yang salah; C salah karena anemia berat umumnya Hb <8,0 g/dL; D dan E tidak tepat secara klinis.',
+    pdfPageRef: 'Acuan: R4 (WHO 2024 Guideline); PDF ANFIS Darah Hal. 41',
+  },
+  {
+    questionNumber: 19,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 19 | Trombosit raksasa',
+    questionText:
+      'Hitung trombosit otomatis 92.000/uL, tetapi apusan menunjukkan banyak trombosit berukuran raksasa tanpa agregat. Risiko analitiknya ialah ...',
+    options: {
+      A: 'Trombosit pasti terlihat sebagai eritrosit berinti',
+      B: 'Hemoglobin selalu palsu tinggi',
+      C: 'Alat tertentu dapat meremehkan jumlah trombosit karena trombosit besar keluar dari rentang pemisahan ukuran',
+      D: 'Jumlah leukosit harus dihapus',
+      E: 'Semua trombosit besar adalah artefak EDTA',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      'Hitung trombosit dengan metode tertentu dapat melewatkan trombosit raksasa. Verifikasi dapat memanfaatkan metode optik/fluoresensi dan korelasi apusan sesuai kemampuan alat. Hasil tidak boleh dilaporkan sebagai final bila interferensi belum ditangani.',
+    atlmProcedureAndDecision:
+      'Pada metode impedansi elektrik, giant platelet yang berukuran mendekati eritrosit dapat tidak terhitung di kanal trombosit. ATLM wajib melakukan estimasi trombosit pada apusan atau memakai kanal PLT-O/PLT-F.',
+    doctorClinicalExplanation:
+      'Informasi adanya giant platelets membantu dokter memahami bahwa jumlah trombosit fungsional pasien mungkin lebih tinggi dari angka impedansi alat.',
+    patientEducation:
+      'Menjelaskan bahwa pemeriksaan apusan mikroskop dilakukan untuk memastikan jumlah dan ukuran keping darah secara akurat.',
+    whyOthersWrong:
+      'A salah karena eritrosit berinti mengganggu hitung WBC, bukan definisi giant platelet; B, D, dan E salah secara analitik.',
+    pdfPageRef: 'Acuan: R1; R5',
+  },
+  {
+    questionNumber: 20,
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 20 | Tabung sitrat kurang terisi',
+    questionText:
+      'Sampel PT/aPTT dalam tabung natrium sitrat hanya terisi sekitar separuh tanda minimal. Risiko paling penting adalah ...',
+    options: {
+      A: 'PT selalu menjadi lebih pendek',
+      B: 'Pengaruh sitrat berlebih relatif terhadap plasma sehingga waktu pembekuan dapat tampak memanjang palsu',
+      C: 'Tidak ada dampak bila tabung telah dikocok',
+      D: 'Kadar hemoglobin meningkat palsu secara pasti',
+      E: 'Jumlah eosinofil menjadi nol',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      'Perbandingan darah dan sitrat harus tepat. Pada tabung yang kurang terisi, sitrat relatif berlebih dapat mengganggu reaksi penambahan kalsium pada uji koagulasi. Gunakan kriteria penerimaan sampel dalam SOP dan minta pengambilan ulang bila tidak memenuhi.',
+    atlmProcedureAndDecision:
+      'Tolak sampel sitrat yang kurang isi (underfilled <90% tanda batas) dan minta pengambilan sampel ulang (recollect) sesuai SOP pra-analitik koagulasi.',
+    doctorClinicalExplanation:
+      'Pelaporan PT/aPTT yang memanjang palsu akibat underfilling dapat menyebabkan kesalahan fatal berupa penghentian antikoagulan atau pemberian transfusi plasma yang tidak perlu.',
+    patientEducation:
+      'Menjelaskan secara sopan perlunya pengambilan sampel ulang karena volume darah pada tabung pertama belum mencapai batas takaran alat.',
+    whyOthersWrong:
+      'A terbalik karena sitrat berlebih justru memperpanjang waktu koagulasi; C salah karena pengocokan tidak memperbaiki rasio 9:1; D dan E tidak relevan.',
+    pdfPageRef: 'Acuan: R2',
   },
   {
     questionNumber: 21,
-    category: 'theory',
-    topic: 'Teori 1 — Hierarki Diferensiasi Jalur Hematopoiesis',
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 21 | Spesimen CBC mengalami pembekuan',
     questionText:
-      'Diagram hematopoiesis dalam materi membagi diferensiasi sel punca hematopoietik menjadi jalur mieloid dan limfoid. Kombinasi produk diferensiasi yang paling tepat adalah:',
+      'ATLM menemukan bekuan kecil pada sampel EDTA yang diminta untuk CBC. Tindakan paling tepat ialah ...',
     options: {
-      A: 'Mieloid: eritrosit, neutrofil/monosit, trombosit; limfoid: limfosit B, limfosit T, dan sel NK',
-      B: 'Mieloid: limfosit B dan T; limfoid: eritrosit dan trombosit',
-      C: 'Mieloid: hanya eritrosit; limfoid: neutrofil, eosinofil, dan basofil',
-      D: 'Mieloid: trombosit dan limfosit T; limfoid: eritrosit dan monosit',
+      A: 'Membuang bekuan dan melaporkan hasil tetap sah',
+      B: 'Menambah antikoagulan sesudah bekuan muncul',
+      C: 'Memanaskan tabung supaya bekuan hilang',
+      D: 'Menolak sampel untuk CBC dan meminta pengambilan ulang sesuai SOP',
+      E: 'Mengganti nilai trombosit dengan angka perkiraan',
     },
-    correctOption: 'A',
+    correctOption: 'D',
     scientificExplanation:
-      'Pluripotent Hematopoietic Stem Cell di sumsum tulang merah bercabang menjadi dua garis keturunan: (1) Myeloid Stem Cell yang menghasilkan eritrosit, megakariosit (trombosit), granulosit (neutrofil, eosinofil, basofil), dan monosit; serta (2) Lymphoid Stem Cell yang menghasilkan limfosit B, limfosit T, dan sel Natural Killer (NK).',
-    optionRationales: {
-      A: 'Tepat: Seluruh produk seluler jalur mieloid dan limfoid sesuai dengan diagram hematopoiesis.',
-      B: 'Tidak tepat: Membalik produk jalur mieloid dan limfoid.',
-      C: 'Tidak tepat: Neutrofil, eosinofil, dan basofil berasal dari jalur mieloid, bukan limfoid.',
-      D: 'Tidak tepat: Limfosit T berasal dari jalur limfoid, sedangkan eritrosit dan monosit berasal dari jalur mieloid.',
-    },
+      'Bekuan mengonsumsi/mengurung trombosit dan leukosit sehingga hasil dapat salah. Mengambil bekuan tidak memperbaiki sampel. Perlu recollect dan dokumentasi ketidaksesuaian spesimen.',
+    atlmProcedureAndDecision:
+      'Jangan memasukkan sampel berbekuan ke Hematology Analyzer karena akan menyumbat probe dan menghasilkan trombositopenia/leukopenia palsu. Lakukan penolakan sampel di LIS dan minta sampel baru.',
     doctorClinicalExplanation:
-      'Pemahaman garis keturunan mieloid vs limfoid sangat esensial dalam klasifikasi keganasan hematologi (Leukemia Mieloid vs Leukemia Limfoid).',
+      'Penolakan sampel beku mencegah kesalahan diagnosis trombositopenia atau anemia palsu.',
     patientEducation:
-      'Menjelaskan bagaimana satu jenis sel induk di sumsum tulang mampu melahirkan seluruh variasi sel darah manusia.',
-    managementPlan:
-      'Aplikasi pengetahuan dasar dalam pembacaan aspirasi sumsum tulang dan sitometri aliran.',
-    pdfPageRef: 'Halaman 11–14',
+      'Menjelaskan bahwa terdapat penggumpalan mikro pada sampel darah sehingga diperlukan pengambilan darah ulang demi keakuratan hasil.',
+    whyOthersWrong:
+      'A salah karena sel sudah terperangkap di dalam jaring fibrin bekuan; B dan C tidak dapat mengembalikan sel yang sudah membeku; E adalah manipulasi data.',
+    pdfPageRef: 'Acuan: R1',
   },
   {
     questionNumber: 22,
-    category: 'theory',
-    topic: 'Teori 2 — Urutan Tahapan Pematangan Eritropoiesis',
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 22 | ABO dalam bank darah',
     questionText:
-      'Materi menggambarkan eritropoiesis sebagai proses dari sel punca menuju eritrosit matur. Urutan yang paling sesuai dengan diagram dan uraian materi adalah:',
+      'Pasien golongan darah B memiliki pola antigen dan antibodi ABO normal berupa ...',
     options: {
-      A: 'Sel punca hematopoietik → CFU-E/committed progenitor → proeritroblas → tahap eritroblas → retikulosit → eritrosit matur',
-      B: 'Megakariosit → mieloblas → monosit → retikulosit → eritrosit',
-      C: 'Limfoblas → proeritroblas → trombosit → eritrosit matur',
-      D: 'Eritrosit matur → retikulosit → proeritroblas → sel punca',
+      A: 'Antigen B pada eritrosit dan anti-A dalam plasma',
+      B: 'Antigen A dan anti-B dalam plasma',
+      C: 'Antigen A/B dan anti-A/anti-B bersama',
+      D: 'Tanpa antigen A/B dan tanpa antibodi',
+      E: 'Antigen D selalu ada tanpa pengecualian',
     },
     correctOption: 'A',
     scientificExplanation:
-      'Eritropoiesis berawal dari sel punca hematopoietik -> progenitor eritroid berkomitmen (CFU-E) -> proeritroblas -> tahapan eritroblas (sintesis hemoglobin dan pengeluaran inti sel/ekstrusi nukleus) -> retikulosit -> eritrosit matang di sirkulasi darah.',
-    optionRationales: {
-      A: 'Tepat: Urutan diferensiasi eritroid dari sel punca hingga eritrosit matur sepenuhnya akurat.',
-      B: 'Tidak tepat: Mencampurkan jalur megakariosit (trombosit) dan monosit.',
-      C: 'Tidak tepat: Limfoblas dan trombosit tidak berada dalam jalur eritropoiesis.',
-      D: 'Tidak tepat: Urutan terbalik dari sel matang ke sel punca.',
-    },
+      'Pada fenotipe B, eritrosit menampilkan antigen B dan plasma mengandung anti-A. Interpretasi akhir golongan darah untuk transfusi memakai uji forward dan reverse sesuai kebijakan serta mengevaluasi diskrepansi.',
+    atlmProcedureAndDecision:
+      'Pada pemeriksaan golongan darah ABO, ATLM mencocokkan hasil cell grouping (Anti-B positif) dengan serum grouping (sel A positif karena adanya anti-A di plasma pasien).',
     doctorClinicalExplanation:
-      'Hormon Eritropoietin (EPO) dari ginjal bekerja mempercepat proliferasi dan pematangan CFU-E serta proeritroblas menjadi retikulosit.',
+      'Kesesuaian antigen B dan antibodi anti-A menjadi dasar pemilihan komponen darah yang kompatibel untuk mencegah reaksi hemolitik akut.',
     patientEducation:
-      'Menjelaskan bahwa pembentukan sel darah merah membutuhkan waktu beberapa hari di sumsum tulang sebelum siap mengedarkan oksigen.',
-    managementPlan:
-      'Evaluasi pematangan eritroid pada kondisi anemia hipoproliferatif.',
-    pdfPageRef: 'Halaman 11–12, 17',
+      'Menjelaskan karakteristik antigen dan antibodi alami pada pemilik golongan darah B.',
+    whyOthersWrong:
+      'B adalah golongan darah A; C dan D tidak mungkin terjadi secara normal menurut Hukum Landsteiner; E salah karena status antigen D (Rhesus) bersifat independen dari sistem ABO.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 42–44); R6',
   },
   {
     questionNumber: 23,
-    category: 'theory',
-    topic: 'Teori 3 — Karakteristik Struktural & Fisiologis Eritrosit Matang',
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 23 | Kontrol mutu internal analyzer',
     questionText:
-      'Eritrosit matang mempunyai karakteristik yang memungkinkan pengangkutan oksigen dan deformabilitas ketika melewati mikrosirkulasi. Pernyataan yang paling tepat berdasarkan materi adalah:',
+      'Dua level bahan kontrol CBC sama-sama bergeser ke arah tinggi dibanding rata-rata historis setelah penggantian reagen. Langkah awal yang tepat ialah ...',
     options: {
-      A: 'Berinti, memiliki mitokondria, dan melakukan sintesis protein secara aktif',
-      B: 'Bikonkaf, elastis, tidak berinti, tidak memiliki mitokondria dan ribosom, serta berumur sekitar 120 hari',
-      C: 'Bergranula, berinti bersegmen, dan melakukan fagositosis',
-      D: 'Merupakan fragmen sel besar yang tidak mengandung hemoglobin',
+      A: 'Melaporkan semua pasien agar TAT terjaga',
+      B: 'Menggeser sendiri nilai rujukan pasien',
+      C: 'Menahan pelaporan parameter terdampak, menelusuri QC, kalibrasi, reagen dan instrumen sesuai SOP',
+      D: 'Membuang grafik QC dan memulai grafik baru tanpa investigasi',
+      E: 'Mengurangi nilai pasien sebesar 10% secara manual',
     },
-    correctOption: 'B',
+    correctOption: 'C',
     scientificExplanation:
-      'Eritrosit matang berbentuk cakram bikonkaf (memperluas rasio luas permukaan terhadap volume untuk difusi gas dan memberikan fleksibilitas melewati kapiler sempit), tidak berinti, tidak memiliki mitokondria (menghasilkan ATP secara anaerob sehingga tidak mengonsumsi O2 yang diangkutnya), dan hidup ±120 hari.',
-    optionRationales: {
-      A: 'Tidak tepat: Eritrosit matang telah kehilangan inti, mitokondria, dan ribosomnya.',
-      B: 'Tepat: Mencakup seluruh ciri anatomi dan fisiologi eritrosit matang secara akurat.',
-      C: 'Tidak tepat: Merupakan ciri granulosit neutrofil, bukan eritrosit.',
-      D: 'Tidak tepat: Fragmen sel tanpa hemoglobin adalah trombosit.',
-    },
+      'Pergeseran QC pada beberapa level mengarah pada bias sistematik. Tindakan mencakup menahan hasil terdampak, investigasi akar masalah, tindakan korektif, dan menilai ulang hasil pasien yang mungkin terkena dampak.',
+    atlmProcedureAndDecision:
+      'Terapkan aturan Westgard pada grafik Levey-Jennings; periksa nomor lot reagen baru, suhu, masa kedaluwarsa, bubble pada saluran, dan faktor kalibrasi sebelum menjalankan sampel pasien.',
     doctorClinicalExplanation:
-      'Karena tidak memiliki inti dan organel untuk memperbaiki membran selnya, membran eritrosit menjadi rapuh setelah 120 hari dan difagositosis oleh makrofag di limpa dan hati.',
+      'Pengendalian mutu internal yang ketat memastikan perubahan hasil laboratorium pasien mencerminkan kondisi klinis sejati, bukan pergeseran alat.',
     patientEducation:
-      'Menjelaskan mengapa tubuh terus-menerus membutuhkan zat gizi setiap hari karena sel darah merah diperbarui setiap 4 bulan (120 hari).',
-    managementPlan:
-      'Pemahaman dasar fisiologi umur eritrosit dalam pemeriksaan HbA1c dan anemia hemolitik.',
-    pdfPageRef: 'Halaman 13–16',
+      'Menjelaskan bahwa laboratorium selalu melakukan pengecekan mutu alat sebelum mengeluarkan hasil pemeriksaan pasien.',
+    whyOthersWrong:
+      'A berisiko merilis hasil pasien yang bias/salah; B, D, dan E melanggar prinsip manajemen mutu laboratorium medik (ISO 15189).',
+    pdfPageRef: 'Acuan: R1',
   },
   {
     questionNumber: 24,
-    category: 'theory',
-    topic: 'Teori 4 — Struktur Molekuler Hemoglobin (Heme & Globin)',
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 24 | Hemostasis primer',
     questionText:
-      'Hemoglobin merupakan komponen utama eritrosit untuk mengikat oksigen. Materi menjelaskan bahwa hemoglobin tersusun atas bagian heme dan globin. Pernyataan yang paling tepat adalah:',
+      'Komponen yang terutama menjembatani adhesi trombosit ke kolagen subendotel yang terpapar adalah ...',
     options: {
-      A: 'Heme merupakan bagian protein, sedangkan globin merupakan cincin porfirin tanpa besi',
-      B: 'Heme mengandung protoporfirin dan besi, sedangkan globin merupakan bagian protein dengan dua rantai alfa dan dua rantai beta',
-      C: 'Heme tersusun atas albumin dan fibrinogen, sedangkan globin merupakan enzim G6PD',
-      D: 'Heme dan globin merupakan dua jenis leukosit',
+      A: 'Albumin dan bilirubin',
+      B: 'Hemoglobin dan heme',
+      C: 'Eritropoietin dan trombopoietin',
+      D: 'Fibrinogen tanpa bantuan trombosit',
+      E: 'Faktor von Willebrand dan reseptor trombosit GPIb',
     },
-    correctOption: 'B',
+    correctOption: 'E',
     scientificExplanation:
-      'Setiap molekul hemoglobin dewasa (HbA) terdiri atas bagian protein Globin (4 rantai polipeptida: 2 alfa dan 2 beta) serta 4 gugus pigmen non-protein Heme (cincin protoporfirin dengan 1 ion besi Fe2+ di tengahnya yang mampu mengikat 1 molekul O2).',
-    optionRationales: {
-      A: 'Tidak tepat: Membalik pengertian heme dan globin serta meniadakan ion besi.',
-      B: 'Tepat: Heme adalah cincin protoporfirin + besi, sedangkan globin adalah protein 2 rantai alfa dan 2 rantai beta.',
-      C: 'Tidak tepat: Albumin dan fibrinogen adalah protein plasma, bukan penyusun hemoglobin.',
-      D: 'Tidak tepat: Heme dan globin adalah komponen molekul hemoglobin di dalam eritrosit.',
-    },
+      'Faktor von Willebrand mengikat kolagen yang terpapar dan berinteraksi dengan reseptor GPIb pada trombosit. Proses ini merupakan langkah penting hemostasis primer dan berbeda dari pembentukan fibrin pada hemostasis sekunder.',
+    atlmProcedureAndDecision:
+      'ATLM memahami bahwa gangguan pada faktor von Willebrand (vWF) atau reseptor GPIb akan mengganggu pembentukan sumbat trombosit awal meskipun jumlah trombosit normal.',
     doctorClinicalExplanation:
-      'Gangguan ketersediaan besi merusak pembentukan Heme (Anemia Defisiensi Besi), sedangkan mutasi genetik sintesis rantai alfa/beta merusak pembentukan Globin (Thalassemia).',
+      'Defisiensi atau disfungsi vWF menyebabkan penyakit von Willebrand yang ditandai perdarahan mukokutan (mimisan, menoragia, perdarahan gusi).',
     patientEducation:
-      'Menjelaskan mengapa pembentukan hemoglobin membutuhkan zat besi sekaligus asupan protein yang cukup.',
-    managementPlan:
-      'Dasar biokimiawi pemisahan diagnosis defisiensi besi vs hemoglobinopati.',
-    pdfPageRef: 'Halaman 9, 14–15',
+      'Menjelaskan bagaimana keping darah menempel pada dinding pembuluh darah yang luka menggunakan jembatan protein khusus.',
+    whyOthersWrong:
+      'A, B, dan C tidak berperan dalam adhesi trombosit; D salah karena fibrinogen menjembatani agregasi antar-trombosit melalui GPIIb/IIIa dan diubah menjadi fibrin pada hemostasis sekunder.',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 35); R1',
   },
   {
     questionNumber: 25,
-    category: 'theory',
-    topic: 'Teori 5 — Fungsi Spesifik Protein Plasma Darah',
+    sectionCode: 'B',
+    category: 'combined',
+    topic: 'SOAL 25 | RDW dan populasi eritrosit campuran',
     questionText:
-      'Plasma darah mengandung beberapa protein yang mempunyai fungsi berbeda. Kombinasi fungsi yang paling tepat adalah:',
+      'MCV 88 fL tetapi RDW 21%, dan pada histogram eritrosit muncul pelebaran distribusi. Langkah analitik yang paling tepat adalah ...',
     options: {
-      A: 'Albumin: mempertahankan tekanan onkotik; globulin: terkait sistem imun; fibrinogen: berperan dalam pembekuan',
-      B: 'Albumin: fagositosis; globulin: mengangkut oksigen; fibrinogen: membentuk leukosit',
-      C: 'Albumin: pembentukan trombosit; globulin: mengubah protrombin; fibrinogen: mengikat oksigen',
-      D: 'Albumin: pembentukan antibodi; globulin: pembentukan eritrosit; fibrinogen: pengaturan suhu saja',
+      A: 'Menyimpulkan seluruh eritrosit normal',
+      B: 'Meninjau apusan untuk anisitosis atau populasi dimorfik meski MCV rata-rata normal',
+      C: 'Menyatakan trombositopenia berat',
+      D: 'Menghapus hasil RDW',
+      E: 'Langsung mendiagnosis leukemia',
     },
-    correctOption: 'A',
+    correctOption: 'B',
     scientificExplanation:
-      'Tiga fraksi utama protein plasma (~7% dari plasma) adalah: Albumin (54%, menjaga tekanan osmotik koloid/onkotik dan transpor molekul), Globulin (38%, mencakup alfa/beta globulin pengangkut dan gamma globulin/imunoglobulin untuk kekebalan tubuh), serta Fibrinogen (7%, prekursor benang fibrin pada koagulasi darah).',
-    optionRationales: {
-      A: 'Tepat: Memasangkan fungsi albumin, globulin, dan fibrinogen secara akurat.',
-      B: 'Tidak tepat: Fagositosis dilakukan leukosit dan oksigen diangkut hemoglobin.',
-      C: 'Tidak tepat: Tidak sesuai dengan fungsi fisiologis protein plasma.',
-      D: 'Tidak tepat: Antibodi adalah fraksi gamma-globulin, bukan albumin.',
-    },
+      'MCV adalah rerata sehingga dua populasi eritrosit berukuran kecil dan besar dapat menghasilkan MCV normal. RDW meningkat menandai variasi ukuran. Apusan dapat menunjukkan anisitosis atau pola dimorfik untuk korelasi.',
+    atlmProcedureAndDecision:
+      'Periksa histogram RBC (apakah tampak bimodal/dua puncak atau kaki kurva melebar) dan konfirmasi pada apusan darah tepi adanya campuran mikrosit dan makrosit.',
     doctorClinicalExplanation:
-      'Kerusakan hati kronis menurunkan sintesis albumin (memicu edema/asites) dan fibrinogen (memicu gangguan pembekuan darah).',
+      'Populasi eritrosit dimorfik dengan MCV normal dan RDW tinggi (21%) sering dijumpai pada defisiensi campuran (besi + folat/B12) atau pasien anemia mikrositik pasca-transfusi PRC.',
     patientEducation:
-      'Menjelaskan peran bagian cair darah (plasma) dalam menjaga keseimbangan cairan tubuh dan kekebalan.',
-    managementPlan:
-      'Evaluasi fraksi protein serum (Albumin/Globulin ratio) dan fungsi hemostasis pada penyakit hepatobilier.',
-    pdfPageRef: 'Halaman 7–9',
+      'Menjelaskan bahwa meskipun ukuran rata-rata sel darah merah tampak normal, terdapat variasi ukuran sel yang perlu diamati di mikroskop.',
+    whyOthersWrong:
+      'A mengabaikan nilai RDW 21% (normal ~11,5–14,5%); C, D, dan E tidak sesuai dengan makna klinis RDW.',
+    pdfPageRef: 'Acuan: R1',
   },
+
+  // ===========================================================================
+  // BAGIAN C: 20 SOAL KASUS SANGAT SULIT (NOMOR 26 - 45)
+  // Dilengkapi Anamnesis, Pemeriksaan Fisik, Catatan Dokter, Hasil Lab & Konteks Obat
+  // ===========================================================================
   {
     questionNumber: 26,
-    category: 'theory',
-    topic: 'Teori 6 — Klasifikasi Morfologi Leukosit (Granulosit vs Agranulosit)',
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 26 | Anemia mikrositik pada perdarahan menstruasi',
+    caseTable: {
+      anamnesis:
+        'Perempuan 28 tahun mengeluh lemah, berdebar, suka mengunyah es, dan menstruasi sangat banyak sejak 8 bulan. Tidak ada demam atau riwayat transfusi.',
+      physicalExam:
+        'Konjungtiva pucat, kuku rapuh, nadi 106/menit, tekanan darah 105/65 mmHg.',
+      doctorOrder:
+        'Dokter umum meminta CBC, retikulosit, ferritin, dan CRP. Dokter sedang mempertimbangkan terapi zat besi serta evaluasi sumber perdarahan.',
+      labResults:
+        'EDTA tidak membeku. Hb 7,8 g/dL; Ht 25%; RBC 3,5 juta/uL; MCV 71 fL; MCH 22 pg; RDW 20%; trombosit 480.000/uL; retikulosit 0,5%; ferritin 6 ng/mL; CRP normal. Apusan: mikrositosis, hipokromia, anisopoikilositosis.',
+      medicationContext:
+        'Belum mendapat obat besi. Pasien bertanya apakah harus membeli obat sendiri dan perlu transfusi.',
+    },
     questionText:
-      'Dalam klasifikasi leukosit, granulosit dibedakan dari agranulosit berdasarkan karakteristik granula sitoplasma. Kombinasi klasifikasi yang benar adalah:',
+      'Pertanyaan: Sebagai ATLM, kombinasi penilaian hasil, tindak lanjut laboratorium, dan komunikasi yang paling tepat ialah ...',
     options: {
-      A: 'Granulosit: neutrofil, eosinofil, basofil; agranulosit: limfosit dan monosit',
-      B: 'Granulosit: limfosit dan monosit; agranulosit: neutrofil, eosinofil, basofil',
-      C: 'Granulosit: eritrosit dan trombosit; agranulosit: limfosit dan basofil',
-      D: 'Granulosit: monosit, basofil, dan limfosit; agranulosit: neutrofil dan eosinofil',
+      A: 'Melaporkan Hb tanpa pemeriksaan konsistensi dan mengatakan transfusi pasti diperlukan.',
+      B: 'Memverifikasi CBC dan apusan, melaporkan pola anemia mikrositik-hipokromik dengan ferritin rendah, mengomunikasikan Hb menurut batas kritis SOP, dan mengarahkan keputusan besi/transfusi kepada dokter.',
+      C: 'Menyimpulkan talasemia mayor hanya dari MCV yang rendah dan menghapus ferritin.',
+      D: 'Mengubah RBC menjadi 4,5 juta/uL supaya sesuai dengan Hb.',
+      E: 'Memberikan resep besi intravena dan menentukan dosis secara mandiri.',
     },
-    correctOption: 'A',
+    correctOption: 'B',
     scientificExplanation:
-      'Berdasarkan ada tidaknya granula spesifik yang mencolok di sitoplasma bawah mikroskop cahaya pasca-pewarnaan Romanowsky, leukosit dibagi menjadi Granulosit (Neutrofil, Eosinofil, Basofil) dan Agranulosit (Limfosit dan Monosit).',
-    optionRationales: {
-      A: 'Tepat: Mengelompokkan ketiga granulosit dan kedua agranulosit dengan benar.',
-      B: 'Tidak tepat: Membalik kelompok granulosit dan agranulosit.',
-      C: 'Tidak tepat: Eritrosit dan trombosit bukan merupakan bagian dari leukosit.',
-      D: 'Tidak tepat: Monosit dan limfosit adalah agranulosit.',
-    },
+      '1. Dasar penalaran laboratorium: Ferritin sangat rendah (6 ng/mL) bersama Hb turun (7,8 g/dL), MCV/MCH rendah (71 fL / 22 pg), RDW tinggi (20%) dan riwayat kehilangan darah mendukung defisiensi besi. Retikulosit yang belum meningkat (0,5%) mengindikasikan respons eritropoiesis belum memadai.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Lakukan QC, periksa identitas/kondisi EDTA, pastikan kesesuaian indeks dengan histogram dan apusan, lalu validasi hasil. Nilai Hb dilaporkan melalui jalur kritis bila memenuhi ketentuan institusi; laporan morfologi bersifat deskriptif, tidak menggantikan diagnosis dokter.',
     doctorClinicalExplanation:
-      'Klasifikasi 5 jenis leukosit ini menjadi dasar pelaporan Differential Count (Hitung Jenis Leukosit) 5-Diff pada Hematology Analyzer maupun pembacaan mikroskopis manual.',
+      '3. Hubungan dengan terapi/obat dokter: Terapi besi oral/intravena serta kemungkinan transfusi ditentukan dokter berdasarkan gejala, stabilitas dan etiologi. ATLM tidak memilih obat atau dosis. Hemoglobin saja tidak cukup sebagai perintah transfusi.',
     patientEducation:
-      'Menjelaskan bahwa sel darah putih terdiri atas lima pasukan berbeda yang masing-masing memiliki spesialisasi melawan kuman.',
-    managementPlan:
-      'Standar kompetensi identifikasi morfologi sel darah putih bagi ATLM.',
-    pdfPageRef: 'Halaman 21–28',
+      '4. Edukasi dan komunikasi: Jelaskan proses pengambilan darah, tujuan pemeriksaan lanjutan dan pentingnya membawa hasil ke dokter untuk menilai perdarahan menstruasi serta memantau respons terapi.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A dan E melampaui kewenangan/menyimpulkan terapi tanpa asesmen; C mengabaikan ferritin; D melanggar integritas data.',
+    pdfPageRef: 'Acuan: M1; R1; R4; R7 (Halaman 10 & 38)',
   },
   {
     questionNumber: 27,
-    category: 'theory',
-    topic: 'Teori 7 — Fungsi Subpopulasi Limfosit (Sel B, CD4+, CD8+, NK)',
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 27 | Mikrositosis familial: talasemia trait atau defisiensi besi?',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 20 tahun mengikuti skrining kesehatan. Sejak remaja hasil Hb sedikit rendah tetapi tidak pernah menjalani transfusi. Kakak memiliki gambaran darah serupa.',
+      physicalExam:
+        'Keadaan umum baik, tidak pucat berat, tanpa hepatosplenomegali.',
+      doctorOrder:
+        'Dokter meminta telaah CBC dan apusan darah untuk memutuskan apakah diperlukan pemeriksaan hemoglobinopati atau suplemen besi.',
+      labResults:
+        'Hb 11,8 g/dL; RBC 6,20 juta/uL; MCV 62 fL; MCH 19 pg; RDW 12,9%; ferritin 82 ng/mL; CRP normal. Apusan: banyak target cell dan mikrositosis relatif seragam. Mentzer index = 62/6,2 = 10.',
+      medicationContext:
+        'Tidak mengonsumsi zat besi. Pasien ingin minum suplemen besi dosis tinggi karena selalu diberi tahu "anemia".',
+    },
     questionText:
-      'Tiga kelompok limfosit yang dijelaskan dalam materi mempunyai fungsi berbeda. Pernyataan yang paling tepat adalah:',
+      'Pertanyaan: Interpretasi dan rekomendasi pemeriksaan lanjutan ATLM yang paling bertanggung jawab adalah ...',
     options: {
-      A: 'Sel B menghasilkan antibodi; CD4+ membantu mengoordinasikan respons imun; CD8+ membunuh sel terinfeksi; NK membunuh sel abnormal',
-      B: 'Sel B melakukan pembekuan; CD4+ mengangkut oksigen; CD8+ menghasilkan albumin; NK membentuk trombosit',
-      C: 'Sel B menjadi neutrofil; CD4+ menghasilkan fibrin; CD8+ menjadi eritrosit; NK menghasilkan hemoglobin',
-      D: 'Sel B dan T hanya melakukan fagositosis, sedangkan NK menghasilkan antibodi',
+      A: 'Pola ini lebih mengarah pada trait talasemia; verifikasi data dan sarankan pemeriksaan hemoglobinopati melalui dokter, sambil menjelaskan bahwa suplementasi besi tidak otomatis diperlukan jika defisiensi besi belum terbukti.',
+      B: 'Mendiagnosis anemia defisiensi besi berdasarkan MCV saja dan menyarankan besi tanpa batas waktu.',
+      C: 'Menyatakan Hb normal sempurna karena RBC tinggi sehingga pemeriksaan tidak diperlukan.',
+      D: 'Menyimpulkan talasemia beta mayor dan menyarankan transfusi bulanan.',
+      E: 'Menetapkan diagnosis pasti talasemia alfa hanya dengan RDW.',
     },
     correctOption: 'A',
     scientificExplanation:
-      'Limfosit terdiri atas: Limfosit B (berdiferensiasi menjadi sel plasma penghasil antibodi/imunitas humoral), Limfosit T Helper CD4+ (mengatur dan mengoordinasikan respons imun), Limfosit T Sitotoksik CD8+ (menghancurkan sel tubuh yang terinfeksi virus/patogen intraseluler), dan Sel NK (membunuh sel terinfeksi dan sel tumor secara langsung).',
-    optionRationales: {
-      A: 'Tepat: Menjelaskan peran spesifik Sel B, Sel T CD4+, Sel T CD8+, dan Sel NK secara tepat.',
-      B: 'Tidak tepat: Mencampurkan fungsi trombosit, eritrosit, dan hepatosit.',
-      C: 'Tidak tepat: Limfosit tidak berubah menjadi eritrosit atau neutrofil.',
-      D: 'Tidak tepat: Penghasil antibodi adalah Sel B (sel plasma), bukan Sel NK.',
-    },
+      '1. Dasar penalaran laboratorium: Mikrositosis berat (62 fL) dengan RBC relatif tinggi (6,20 juta/uL), RDW hampir normal (12,9%), ferritin memadai (82 ng/mL), target cell, dan Mentzer index rendah (10) mendukung pola trait talasemia lebih kuat daripada defisiensi besi murni. Namun indeks diskriminan bukan tes konfirmasi.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Validasi CBC dan morfologi. Komunikasikan kemungkinan hemoglobinopati untuk pemeriksaan konfirmasi seperti HPLC/elektroforesis hemoglobin berdasarkan permintaan klinisi. HbA2 dapat mendukung beta-talasemia trait, sedangkan alfa-talasemia dapat memerlukan pendekatan berbeda.',
     doctorClinicalExplanation:
-      'Pemeriksaan rasio limfosit CD4+ dan CD8+ dengan flow cytometry digunakan secara luas dalam pemantauan status imunologi pasien (seperti pada infeksi HIV).',
+      '3. Hubungan dengan terapi/obat dokter: Pemberian zat besi bergantung bukti defisiensi yang dinilai dokter; suplemen tidak diberikan semata-mata karena nilai MCV rendah.',
     patientEducation:
-      'Menjelaskan cara kerja sistem kekebalan spesifik dan pembentukan antibodi pasca-infeksi atau vaksinasi.',
-    managementPlan:
-      'Aplikasi imunologi hematologi pada laboratorium klinik.',
-    pdfPageRef: 'Halaman 21–25, 28',
+      '4. Edukasi dan komunikasi: Jelaskan arti temuan laboratorium dan pentingnya konsultasi serta kemungkinan konseling keluarga bila diagnosis akhirnya dikonfirmasi.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: B mengabaikan status besi; C mengabaikan Hb dan MCV; D menyamakan trait dengan bentuk berat; E terlalu pasti untuk alat skrining.',
+    calculationSteps: 'Mentzer Index = MCV / RBC = 62 / 6,20 = 10 (< 13 mengarah pada trait talasemia).',
+    pdfPageRef: 'Acuan: R1; R7 (Halaman 11 & 39)',
   },
   {
     questionNumber: 28,
-    category: 'theory',
-    topic: 'Teori 8 — Mekanisme Trombopoiesis dari Megakariosit',
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 28 | Anemia makrositik dengan neuropati',
+    caseTable: {
+      anamnesis:
+        'Perempuan 64 tahun memiliki pola makan vegan ketat dan mengeluh kesemutan tungkai, gangguan berjalan, serta cepat lelah sejak 4 bulan.',
+      physicalExam:
+        'Lidah licin kemerahan, pucat, penurunan sensasi getar pada kedua tungkai, nadi 96/menit.',
+      doctorOrder:
+        'Dokter meminta CBC, apusan, retikulosit, vitamin B12 dan folat. Dokter mempertimbangkan terapi vitamin setelah hasil diterima.',
+      labResults:
+        'Hb 8,2 g/dL; RBC 2,1 juta/uL; MCV 121 fL; trombosit 125.000/uL; retikulosit 0,4%; vitamin B12 90 pg/mL (rendah); folat normal. Apusan: macro-ovalocyte dan neutrofil hipersegmentasi.',
+      medicationContext:
+        'Pasien memiliki tablet asam folat di rumah dan bertanya apakah tablet tersebut cukup.',
+    },
     questionText:
-      'Trombosit merupakan fragmen sel kecil tanpa inti yang berasal dari sel besar di sumsum tulang. Jalur pembentukan yang paling tepat adalah:',
+      'Pertanyaan: Sikap ATLM yang paling tepat terhadap hasil dan pertanyaan obat adalah ...',
     options: {
-      A: 'Megakariosit mengalami fragmentasi dan melepaskan trombosit',
-      B: 'Limfoblas membelah menjadi trombosit',
-      C: 'Retikulosit kehilangan hemoglobin dan menjadi trombosit',
-      D: 'Neutrofil mengalami fagositosis dan berubah menjadi trombosit',
+      A: 'Menyebutnya anemia hemolitik karena terdapat anemia dan trombosit sedikit turun.',
+      B: 'Mengabaikan perubahan neurologis karena tidak termasuk hematologi.',
+      C: 'Memberikan asam folat dosis tinggi sebagai satu-satunya terapi di laboratorium.',
+      D: 'Memvalidasi pola anemia megaloblastik dan B12 rendah, melapor ke dokter, serta menjelaskan bahwa pemberian folat saja tidak menggantikan evaluasi/terapi defisiensi B12 terutama jika ada gejala neurologis.',
+      E: 'Menetapkan leukemia akut dari satu hasil MCV.',
     },
-    correctOption: 'A',
+    correctOption: 'D',
     scientificExplanation:
-      'Di bawah pengaruh hormon Trombopoietin (TPO), sel punca mieloid berdiferensiasi menjadi megakarioblas lalu matang menjadi sel raksasa Megakariosit di sumsum tulang. Sitoplasma megakariosit menjulur dan mengalami fragmentasi menjadi 2.000–3.000 keping trombosit yang masuk ke aliran darah.',
-    optionRationales: {
-      A: 'Tepat: Trombosit terbentuk dari fragmentasi sitoplasma megakariosit.',
-      B: 'Tidak tepat: Limfoblas adalah prekursor limfosit.',
-      C: 'Tidak tepat: Retikulosit matang menjadi eritrosit, bukan trombosit.',
-      D: 'Tidak tepat: Neutrofil adalah leukosit matang dan tidak membentuk trombosit.',
-    },
+      '1. Dasar penalaran laboratorium: Makro-ovalosit dan neutrofil hipersegmentasi adalah pola khas megaloblastik; B12 sangat rendah (90 pg/mL) dengan gejala neurologis membuat defisiensi B12 sangat mungkin. Retikulosit rendah (0,4%) mencerminkan produksi tidak efektif.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Periksa flag analyzer, apusan dan konsistensi hasil; laporkan morfologi dan hasil B12 dengan ketentuan mutu pemeriksaan. Penilaian etiologi tambahan, misalnya malabsorpsi, dilakukan klinisi.',
     doctorClinicalExplanation:
-      'Karena trombosit berasal dari megakariosit di sumsum tulang, evaluasi aspirasi sumsum tulang pada trombositopenia berat bertujuan melihat apakah jumlah megakariosit meningkat (destruksi perifer seperti ITP) atau menurun (kegagalan sumsum tulang).',
+      '3. Hubungan dengan terapi/obat dokter: Dokter memutuskan rute, dosis dan jadwal vitamin B12. Folat sendiri dapat memperbaiki aspek hematologis sementara gangguan neurologis akibat defisiensi B12 tetap berlangsung.',
     patientEducation:
-      'Menjelaskan bahwa keping darah diproduksi terus-menerus oleh sel induk raksasa di sumsum tulang dan memiliki masa hidup sekitar 5–9 hari.',
-    managementPlan:
-      'Evaluasi MPV (Mean Platelet Volume) dan jumlah trombosit pada CBC.',
-    pdfPageRef: 'Halaman 26 dan 32',
+      '4. Edukasi dan komunikasi: Anjurkan pasien berkonsultasi segera mengenai kesemutan dan gangguan berjalan, serta tidak mengandalkan obat yang ada di rumah tanpa penilaian dokter.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A, B, dan E tidak didukung data; C adalah terapi tanpa kewenangan dan mengabaikan risiko neurologis.',
+    pdfPageRef: 'Acuan: M1; R1; R7 (Halaman 12 & 40)',
   },
   {
     questionNumber: 29,
-    category: 'theory',
-    topic: 'Teori 9 — Urutan Fisiologis Tahapan Hemostasis & Resolusi',
-    questionText:
-      'Ketika pembuluh darah mengalami cedera, materi menjelaskan respons bertahap untuk menghentikan perdarahan. Urutan yang benar adalah:',
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 29 | Hemolisis imun dan pemeriksaan DAT',
+    caseTable: {
+      anamnesis:
+        'Perempuan 47 tahun dengan lupus mengalami lemas mendadak, mata kuning, dan urine gelap 3 hari. Tidak ada perdarahan luar.',
+      physicalExam: 'Ikterus sklera, pucat, nadi 112/menit, suhu 37,5 C.',
+      doctorOrder:
+        'Dokter mencurigai anemia hemolitik dan meminta CBC, retikulosit, bilirubin fraksi, LDH, haptoglobin, DAT, serta persiapan transfusi bila diperlukan.',
+      labResults:
+        'Hb 6,9 g/dL; retikulosit 9%; LDH 960 U/L; bilirubin indirek meningkat; haptoglobin tidak terdeteksi; DAT positif IgG; apusan menunjukkan sferosit. Tidak ada aglutinasi saat pengujian suhu ruang.',
+      medicationContext:
+        'Pasien baru menggunakan obat imunosupresif atas resep dokter. Tim klinis sedang menilai kortikosteroid dan kebutuhan komponen darah.',
+    },
+    questionText: 'Pertanyaan: Respons ATLM pada kasus ini yang paling tepat adalah ...',
     options: {
-      A: 'Vasokonstriksi → sumbat trombosit → koagulasi → resolusi',
-      B: 'Koagulasi → vasokonstriksi → resolusi → sumbat trombosit',
-      C: 'Sumbat trombosit → resolusi → vasokonstriksi → koagulasi',
-      D: 'Resolusi → fibrinolisis → vasokonstriksi → aktivasi trombosit',
+      A: 'Melaporkan "hemolisis imun mungkin" beserta hasil DAT tervalidasi, segera mengomunikasikan Hb kritis, berkoordinasi dengan bank darah bila transfusi diminta dan tidak menentukan kortikosteroid secara mandiri.',
+      B: 'Menyimpulkan anemia defisiensi besi dan membatalkan DAT.',
+      C: 'Memberi steroid oral dan memulangkan pasien.',
+      D: 'Mengganti hasil DAT menjadi negatif agar crossmatch lebih mudah.',
+      E: 'Menilai semua sferosit pasti akibat keturunan, mengabaikan DAT.',
     },
     correctOption: 'A',
     scientificExplanation:
-      'Saat pembuluh darah cedera, respons hemostasis berlangsung berurutan: (1) Vasokonstriksi (spasme vaskular otot polos untuk mengurangi aliran darah), (2) Pembentukan sumbat trombosit (hemostasis primer: adhesi, aktivasi/pelepasan, agregasi), (3) Koagulasi darah (hemostasis sekunder: pembentukan jaring benang fibrin tidak larut), dan (4) Resolusi/Fibrinolisis (pelarutan bekuan oleh plasmin setelah jaringan sembuh).',
-    optionRationales: {
-      A: 'Tepat: Urutan keempat fase hemostasis hingga resolusi sesuai dengan diagram fisiologi.',
-      B: 'Tidak tepat: Koagulasi fibrin terjadi setelah vasokonstriksi dan sumbat trombosit.',
-      C: 'Tidak tepat: Resolusi adalah tahap paling akhir setelah pembuluh darah pulih.',
-      D: 'Tidak tepat: Menempatkan resolusi dan fibrinolisis di urutan awal.',
-    },
+      '1. Dasar penalaran laboratorium: Hb rendah (6,9 g/dL), retikulositosis (9%), LDH dan bilirubin indirek tinggi, haptoglobin rendah, DAT IgG positif serta sferosit mendukung anemia hemolitik autoimun pada konteks ini. DAT perlu ditafsirkan bersama riwayat obat dan transfusi.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Verifikasi identitas, sampel dan hasil DAT menggunakan kontrol reagen. Komunikasikan nilai kritis dan temuan hemolisis; jika ada kebutuhan transfusi, rujuk prosedur kompatibilitas dan konsultasi dokter bank darah.',
     doctorClinicalExplanation:
-      'Keseimbangan antara pembentukan bekuan (koagulasi) dan pelarutan bekuan (fibrinolisis) mencegah perdarahan masif sekaligus mencegah trombosis patologis.',
+      '3. Hubungan dengan terapi/obat dokter: Keputusan kortikosteroid, imunosupresi maupun transfusi dilakukan dokter. Kesulitan uji silang dapat memerlukan strategi bank darah sesuai risiko klinis, bukan manipulasi hasil.',
     patientEducation:
-      'Menjelaskan bagaimana tubuh secara otomatis menyempitkan pembuluh darah dan menambal luka dalam hitungan menit.',
-    managementPlan:
-      'Pemilihan tes laboratorium hemostasis sesuai tahapan yang dicurigai mengalami gangguan.',
-    pdfPageRef: 'Halaman 29–40',
+      '4. Edukasi dan komunikasi: Pasien perlu mendapat penjelasan dokter mengenai pemantauan anemia, tanda memburuk seperti sesak/gelap urine, dan kepatuhan kontrol.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: B dan E mengabaikan bukti hemolisis imun; C melakukan terapi di luar kewenangan; D memalsukan pemeriksaan.',
+    pdfPageRef: 'Acuan: R1; R6; R7 (Halaman 13 & 41)',
   },
   {
     questionNumber: 30,
-    category: 'theory',
-    topic: 'Teori 10 — Genetika & Antigen Sistem Golongan Darah ABO dan Rhesus',
-    questionText:
-      'Golongan darah ABO ditentukan oleh antigen pada permukaan eritrosit. Antigen A dan B bersifat kodominan. Faktor Rh positif berkaitan dengan keberadaan antigen D. Pernyataan yang benar adalah:',
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 30 | Mikroangiopati trombotik dan schistocyte',
+    caseTable: {
+      anamnesis:
+        'Perempuan 39 tahun datang dengan bingung akut, lemas, dan urin berkurang. Sejak sehari ada bintik perdarahan di kulit.',
+      physicalExam:
+        'Tampak letargis, petekie, nadi 120/menit, tekanan darah 145/95 mmHg.',
+      doctorOrder:
+        'Dokter meminta CBC STAT, apusan schistocyte, LDH, bilirubin, PT/aPTT, kreatinin, dan ADAMTS13 untuk evaluasi TTP/TMA.',
+      labResults:
+        'Hb 8,1 g/dL; trombosit 14.000/uL; schistocyte 4% dari eritrosit yang ditelaah menurut prosedur morfologi; LDH 1.250 U/L; kreatinin 2,2 mg/dL; PT/aPTT dalam batas rujukan. Sampel EDTA tidak menggumpal.',
+      medicationContext:
+        'Dokter mempertimbangkan pertukaran plasma dan tata laksana kegawatdaruratan; pasien belum memperoleh terapi.',
+    },
+    questionText: 'Pertanyaan: Manakah prioritas tindakan dan pelaporan ATLM paling tepat?',
     options: {
-      A: 'Golongan AB memiliki antigen A dan B; Rh positif menunjukkan antigen D terdeteksi',
-      B: 'Golongan O memiliki antigen A dan B; Rh negatif menunjukkan antigen D terdeteksi',
-      C: 'Golongan A tidak memiliki antigen A; Rh positif berarti tidak ada antigen D',
-      D: 'Golongan B memiliki antigen A dan B; Rh negatif selalu berarti golongan O',
+      A: 'Mengesampingkan schistocyte karena PT normal.',
+      B: 'Menunda semua hasil sampai ADAMTS13 selesai beberapa hari.',
+      C: 'Memverifikasi dan mendokumentasikan jumlah schistocyte, mengomunikasikan trombosit kritis dan temuan TMA segera, serta memfasilitasi sampel ADAMTS13 bila diminta tanpa menunda komunikasi darurat.',
+      D: 'Meresepkan antikoagulan dan transfusi trombosit rutin.',
+      E: 'Menyimpulkan pasti DIC hanya karena trombosit turun.',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Schistocyte jauh di atas 1% (4%), hemolisis, trombositopenia berat (14.000/uL), gangguan ginjal dan manifestasi neurologis mencurigakan TMA. PT/aPTT normal dapat ditemukan pada TTP, berbeda dengan beberapa bentuk DIC.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Hitung/konfirmasi schistocyte memakai kriteria ICSH, periksa kualitas apusan, validasi CBC dan komunikasikan hasil mendesak. Pemeriksaan ADAMTS13 diproses sesuai ketersediaan, tetapi diagnosis dan tindakan darurat tidak boleh bergantung pada laboratorium rujukan yang lambat.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Pertukaran plasma dan terapi spesifik diputuskan dokter hematologi. Trombosit tidak otomatis ditransfusikan secara profilaksis pada dugaan TTP; pengecualian ditetapkan klinisi.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Komunikasikan kepada tim medis bahwa hasil membutuhkan penanganan segera; edukasi pasien/keluarga tentang kondisi dilakukan dokter penanggung jawab.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A, B menunda respons berbahaya; D melewati kewenangan; E tidak sesuai pola koagulasi.',
+    pdfPageRef: 'Acuan: R3; R7 (Halaman 14 & 42)',
+  },
+  {
+    questionNumber: 31,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 31 | Flag blast pada hitung darah otomatis',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 19 tahun mengalami demam berulang, nyeri tulang, lelah, dan mimisan selama 2 minggu.',
+      physicalExam: 'Pucat, petekie, pembesaran kelenjar leher, suhu 38,3 C.',
+      doctorOrder:
+        'Dokter meminta CBC dan apusan segera; konsultasi hematologi direncanakan jika ada sel imatur mencurigakan.',
+      labResults:
+        'WBC 78.000/uL; Hb 7,4 g/dL; trombosit 24.000/uL. Analyzer memberi flag blast. Apusan terdapat sekitar 45% sel imatur besar dengan kromatin halus dan nukleolus nyata. Kontrol analyzer valid.',
+      medicationContext:
+        'Belum memakai obat sitotoksik. Dokter akan menentukan pemeriksaan imunofenotip dan terapi lanjutan.',
+    },
+    questionText: 'Pertanyaan: Langkah ATLM yang paling aman dan informatif adalah ...',
+    options: {
+      A: 'Melaporkan hasil leukosit saja tanpa catatan karena flag alat tidak memiliki nilai klinis.',
+      B: 'Mengidentifikasi subtipe leukemia pasti hanya dari angka WBC.',
+      C: 'Mengeluarkan resep kemoterapi setelah menemukan blast.',
+      D: 'Mengulang pemeriksaan pada hari lain tanpa melapor.',
+      E: 'Melakukan verifikasi hitung dan apusan, mendokumentasikan sel imatur/dugaan blast, menghubungi dokter segera sesuai SOP, lalu mendukung pemeriksaan konfirmasi yang diminta seperti flow cytometry.',
+    },
+    correctOption: 'E',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Leukositosis tinggi (78.000/uL) dengan anemia, trombositopenia dan proporsi sel imatur besar yang dominan (45%) sangat mencurigakan leukemia akut. Penentuan lini dan subtipe perlu imunofenotip, sitogenetik atau molekuler.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Pastikan sampel benar dan alat berkinerja baik, lakukan review smear oleh tenaga kompeten, catat persentase sel imatur secara hati-hati, dan laporkan hasil kritis melalui prosedur komunikasi.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Tatalaksana kemoterapi dan profilaksis komplikasi ditetapkan dokter; ATLM memastikan pemeriksaan penunjang dan integritas hasil sebelum/sesudah terapi.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Sampaikan kepada tim bahwa hasil perlu ditindaklanjuti cepat. Edukasi klinis khusus diberikan oleh dokter/perawat yang merawat.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A dan D menunda komunikasi; B terlalu pasti; C tidak termasuk kewenangan ATLM.',
+    pdfPageRef: 'Acuan: R1; R7 (Halaman 15 & 43)',
+  },
+  {
+    questionNumber: 32,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 32 | Dugaan leukemia promielositik akut dan DIC',
+    caseTable: {
+      anamnesis:
+        'Perempuan 24 tahun datang dengan perdarahan gusi terus-menerus, memar spontan, dan kelelahan selama 5 hari.',
+      physicalExam:
+        'Petekie menyeluruh, perdarahan mukosa aktif, tekanan darah 95/60 mmHg.',
+      doctorOrder:
+        'Dokter menulis "suspek acute promyelocytic leukemia (APL), mohon CBC, smear STAT, PT, aPTT, fibrinogen dan D-dimer; tes PML::RARA jika indikasi".',
+      labResults:
+        'Hb 9,1 g/dL; WBC 2.400/uL; trombosit 18.000/uL; smear menunjukkan promielosit abnormal dengan banyak granula/Auer rods. PT memanjang; fibrinogen 85 mg/dL; D-dimer sangat meningkat.',
+      medicationContext:
+        'Tim dokter menyebut kemungkinan pemberian ATRA segera sebagai terapi emergensi sebelum konfirmasi molekuler.',
+    },
+    questionText: 'Pertanyaan: Keputusan ATLM yang paling tepat ialah ...',
+    options: {
+      A: 'Melepas hasil tanpa verifikasi dan menyarankan pasien pulang karena WBC rendah.',
+      B: 'Memastikan kualitas sampel sitrat dan apusan, segera melaporkan temuan sel mencurigakan beserta gangguan koagulasi kritis, serta memproses konfirmasi molekuler tanpa menunda peringatan kepada dokter.',
+      C: 'Mengganti hitung trombosit menjadi normal agar transfusi dapat ditunda.',
+      D: 'Memberikan ATRA dengan dosis yang ditentukan laboratorium.',
+      E: 'Menunggu hasil PML::RARA sebelum memberi tahu klinisi tentang fibrinogen rendah.',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Promielosit abnormal (Auer rods) dan koagulopati konsumtif dengan fibrinogen sangat rendah (85 mg/dL) merupakan keadaan yang sangat mencurigakan APL disertai koagulopati berat. Perdarahan dapat berlangsung cepat.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Validasi preparat, aturan penerimaan sitrat, QC koagulasi dan nilai kritis, lalu lakukan komunikasi dua arah yang terdokumentasi. Konfirmasi PML::RARA penting tetapi tidak boleh menghalangi laporan keadaan mendesak.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Dokter menentukan ATRA dan transfusi komponen hemostatik sesuai kebutuhan. ATLM tidak menetapkan dosis atau memulai terapi.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Keterangan kepada pasien/keluarga mengenai kondisi dan obat adalah tanggung jawab tim klinis; laboratorium dapat menjelaskan perlunya sampel lanjutan.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A, C, D melanggar keselamatan dan kewenangan; E menunda informasi kritis.',
+    pdfPageRef: 'Acuan: R1; R2; R7 (Halaman 16 & 44)',
+  },
+  {
+    questionNumber: 33,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 33 | Trombositopenia palsu akibat EDTA',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 34 tahun menjalani skrining praoperasi. Tidak pernah mudah memar atau mimisan. Hasil trombosit 6 bulan lalu 235.000/uL.',
+      physicalExam:
+        'Tidak tampak petekie, tanda perdarahan negatif, parameter vital normal.',
+      doctorOrder:
+        'Dokter bedah melihat trombosit 18.000/uL dan meminta klarifikasi sebelum memutuskan pembatalan operasi atau transfusi trombosit.',
+      labResults:
+        'CBC EDTA: trombosit 18.000/uL dengan flag "platelet clump"; Hb/WBC normal. Apusan memperlihatkan agregat trombosit besar di tepi dan ekor preparat. Sampel tidak membeku. Ulangan tabung sitrat menunjukkan hasil mendekati normal setelah validasi metode, koreksi pengenceran dan pemeriksaan apusan.',
+      medicationContext:
+        'Tidak mengonsumsi aspirin, heparin ataupun obat antiplatelet. Dokter mempertimbangkan trombosit berdasarkan hasil awal.',
+    },
+    questionText: 'Pertanyaan: Apa respons terbaik ATLM?',
+    options: {
+      A: 'Menganggap 18.000/uL sebagai trombositopenia sejati tanpa catatan.',
+      B: 'Meminta dokter langsung memberi transfusi trombosit tanpa pemeriksaan ulang.',
+      C: 'Menghapus semua hasil awal dari sistem tanpa audit trail.',
+      D: 'Menahan/menandai hasil yang terinterferensi, mengonfirmasi agregasi pada apusan dan hasil alternatif yang tervalidasi, kemudian melapor bahwa terdapat dugaan pseudotrombositopenia EDTA.',
+      E: 'Mengganti Hb menjadi rendah untuk memperkuat indikasi transfusi.',
+    },
+    correctOption: 'D',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Agregasi trombosit in vitro menyebabkan hitung trombosit otomatis rendah palsu. Ketiadaan gejala dan nilai historis normal mendukung dugaan, tetapi konfirmasi laboratorium tetap diperlukan.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Tinjau smear sampai area feathered edge; gunakan alternatif metode/antikoagulan tervalidasi bila tersedia. Tabung sitrat tidak selalu memperbaiki agregasi, jadi hasil alternatif tetap perlu telaah dan koreksi pengenceran sesuai prosedur. Dokumentasikan revisi.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Transfusi atau pengubahan obat adalah keputusan dokter setelah menerima hasil yang benar; trombositopenia palsu bukan indikasi transfusi.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Jelaskan kepada pasien bahwa pengulangan sampel ditujukan untuk memastikan akurasi, bukan berarti kondisi telah pasti berbahaya.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A, B akan memicu terapi tak perlu; C dan E melanggar tata kelola hasil.',
+    pdfPageRef: 'Acuan: R5 (Halaman 17 & 45)',
+  },
+  {
+    questionNumber: 34,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 34 | Curiga trombositopenia akibat heparin',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 60 tahun dirawat setelah operasi ortopedi dan mendapat heparin profilaksis 7 hari. Kaki tiba-tiba nyeri dan bengkak.',
+      physicalExam:
+        'Edema tungkai unilateral; tidak ada perdarahan mukosa; suhu 37,2 C.',
+      doctorOrder:
+        'Dokter mencurigai heparin-induced thrombocytopenia (HIT) dan meminta serial CBC, apusan, serta pemeriksaan anti-PF4/heparin jika skor klinis mendukung.',
+      labResults:
+        'Trombosit hari 1: 245.000/uL; hari 7: 88.000/uL. Ulang sampel EDTA dan apusan menegaskan penurunan tanpa agregat. Hb 12,5 g/dL; WBC 10.500/uL. PT/aPTT tidak menunjukkan gangguan berat.',
+      medicationContext:
+        'Pasien masih memakai heparin. Dokter akan menilai skor 4Ts dan alternatif antikoagulan.',
+    },
+    questionText: 'Pertanyaan: Pernyataan dan langkah ATLM terbaik adalah ...',
+    options: {
+      A: 'Penurunan trombosit >50% setelah paparan heparin perlu dikomunikasikan; verifikasi tren dan artefak, dukung uji immunoassay anti-PF4 sesuai permintaan, serta ingatkan bahwa hasil positif perlu diintegrasikan dengan probabilitas klinis dan tes fungsional.',
+      B: 'HIT tersingkir hanya karena PT normal.',
+      C: 'ATLM secara mandiri memutuskan heparin diteruskan 7 hari lagi.',
+      D: 'Semua trombositopenia setelah operasi pasti DIC.',
+      E: 'Anti-PF4 positif selalu membuktikan HIT klinis tanpa memandang probabilitas.',
     },
     correctOption: 'A',
     scientificExplanation:
-      'Karena alel A dan B bersifat kodominan, individu bergolongan darah AB mengekspresikan baik Antigen A maupun Antigen B pada membran eritrositnya (serta tidak memiliki antibodi anti-A maupun anti-B di plasma). Pada sistem Rhesus, terdeteksinya antigen D pada permukaan eritrosit menetapkan status Rh positif.',
-    optionRationales: {
-      A: 'Tepat: Golongan AB memiliki antigen A & B, dan Rh positif berarti antigen D terdeteksi.',
-      B: 'Tidak tepat: Golongan O tidak memiliki antigen A maupun B, dan Rh negatif berarti antigen D tidak ada.',
-      C: 'Tidak tepat: Golongan A memiliki antigen A, dan Rh positif memiliki antigen D.',
-      D: 'Tidak tepat: Golongan B hanya memiliki antigen B, dan sistem Rhesus diwariskan secara independen dari sistem ABO.',
-    },
+      '1. Dasar penalaran laboratorium: Trombosit turun lebih dari 50% (dari 245.000 ke 88.000/uL) sekitar hari 5–10 sejak heparin, disertai kecurigaan trombosis, sesuai pola yang menuntut penilaian HIT. Namun penyebab lain, skor 4Ts dan karakteristik uji harus dipertimbangkan.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Periksa delta check, identitas dan smear untuk menyingkirkan clumping. Komunikasikan penurunan bermakna; lakukan uji anti-PF4 bila indikasi dan tersedia. Tes fungsional dapat diperlukan untuk konfirmasi di laboratorium rujukan.',
     doctorClinicalExplanation:
-      'Pemahaman ekspresi antigen permukaan eritrosit dan antibodi plasma mendasari keselamatan transfusi darah untuk mencegah reaksi hemolitik akut.',
+      '3. Hubungan dengan terapi/obat dokter: Keputusan menghentikan heparin dan menggunakan antikoagulan non-heparin ditetapkan dokter karena risiko trombosis dan perdarahan.',
     patientEducation:
-      'Menjelaskan pewarisan sifat golongan darah ABO dan Rhesus dari orang tua kepada anak.',
-    managementPlan:
-      'Prosedur baku imunohematologi pra-transfusi di instalasi laboratorium medik.',
-    pdfPageRef: 'Halaman 35–36, 42–45',
+      '4. Edukasi dan komunikasi: Jelaskan bahwa waktu pengambilan sampel dan daftar obat perlu akurat agar dokter dapat menilai sebab perubahan trombosit.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: B tidak mengevaluasi HIT; C melampaui kewenangan; D berlebihan; E mengabaikan kemungkinan positif palsu.',
+    pdfPageRef: 'Acuan: R1; R7 (Halaman 18 & 46)',
+  },
+  {
+    questionNumber: 35,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 35 | Koagulopati konsumtif pada sepsis',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 53 tahun mengalami pneumonia berat, penurunan kesadaran, dan perdarahan dari bekas venipungsi.',
+      physicalExam:
+        'Tekanan darah 82/50 mmHg, suhu 39,1 C, akral dingin, petekie dan ekimosis.',
+      doctorOrder:
+        'Dokter ICU meminta CBC serial, PT, aPTT, fibrinogen, dan D-dimer untuk evaluasi DIC. Spesimen koagulasi tiba tepat waktu dengan volume tabung sesuai batas.',
+      labResults:
+        'Trombosit turun 170.000 menjadi 54.000/uL; PT 25 detik (kontrol 12); aPTT 64 detik; fibrinogen 90 mg/dL; D-dimer 9,5 mg/L FEU. Hasil QC normal dan tabung sitrat terisi baik.',
+      medicationContext:
+        'Dokter memberi terapi infeksi dan mempertimbangkan produk darah berdasarkan perdarahan dan hasil koagulasi.',
+    },
+    questionText:
+      'Pertanyaan: Pilihan pelaporan dan tindak lanjut ATLM yang paling tepat adalah ...',
+    options: {
+      A: 'Menganggap PT/aPTT panjang pasti artefak walaupun tabung baik.',
+      B: 'Menganjurkan antibiotik tertentu sebagai resep ATLM.',
+      C: 'Menghapus nilai fibrinogen karena dokter sudah tahu sepsis.',
+      D: 'Menunda nilai kritis sampai semua pemeriksaan ulang keesokan hari.',
+      E: 'Memastikan akurasi spesimen dan QC, melaporkan pola koagulopati konsumtif beserta penurunan serial trombosit serta menyampaikan nilai kritis kepada tim ICU segera.',
+    },
+    correctOption: 'E',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Sepsis berat dengan trombosit menurun, PT/aPTT memanjang, fibrinogen rendah (90 mg/dL) dan D-dimer meningkat (9,5 mg/L FEU) sangat mendukung proses koagulasi konsumtif. Tren serial memperkuat temuan, tetapi diagnosis DIC tetap didasarkan evaluasi klinis dan skor yang sesuai.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Periksa integritas spesimen sitrat, waktu, QC dan potensi heparin/obat pengganggu; nilai pada kasus sudah tervalidasi. Dokumentasikan hasil kritis fibrinogen/trombosit menurut SOP serta pastikan penerima jelas.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Dokter menangani infeksi, resusitasi dan penggunaan plasma/fibrinogen/trombosit bila diindikasikan. ATLM menyediakan pemeriksaan pemantauan, bukan resep obat.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Sampaikan kepada perawat/dokter perlunya seri pemeriksaan sesuai instruksi. Keluarga mendapat konseling klinis dari tim perawat/dokter.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A, C, D mengabaikan bukti kuat; B di luar kewenangan ATLM.',
+    pdfPageRef: 'Acuan: R1; R2; R7 (Halaman 19 & 47)',
+  },
+  {
+    questionNumber: 36,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 36 | Hemofilia A pada anak dengan hemartrosis',
+    caseTable: {
+      anamnesis:
+        'Anak laki-laki 12 tahun dengan pembengkakan lutut berulang setelah trauma ringan. Paman dari garis ibu memiliki riwayat perdarahan.',
+      physicalExam:
+        'Sendi lutut bengkak nyeri tanpa petekie luas, tanda vital stabil.',
+      doctorOrder:
+        'Dokter anak meminta PT, aPTT, mixing test, aktivitas faktor VIII dan IX. Tabung sitrat 3,2% diisi sampai batas, hematokrit 38%.',
+      labResults:
+        'PT normal; aPTT 81 detik (rujukan 25-35); mixing test 1:1 terkoreksi segera dan tetap terkoreksi setelah inkubasi; aktivitas FVIII 1%; FIX 94%; trombosit normal.',
+      medicationContext:
+        'Dokter mempertimbangkan pemberian konsentrat faktor VIII untuk episode perdarahan sendi.',
+    },
+    questionText:
+      'Pertanyaan: Interpretasi laboratorium dan langkah ATLM yang paling tepat adalah ...',
+    options: {
+      A: 'Menyimpulkan DIC karena satu uji koagulasi memanjang.',
+      B: 'Mendiagnosis hemofilia B karena pasien laki-laki.',
+      C: 'Memverifikasi pemeriksaan koagulasi dan melaporkan pola defisiensi FVIII yang mendukung hemofilia A, dengan mixing test terkoreksi; pelaksanaan terapi faktor adalah keputusan dokter.',
+      D: 'Memberikan faktor VIII melalui prosedur laboratorium tanpa perintah dokter.',
+      E: 'Menetapkan lupus anticoagulant sebagai penyebab tunggal meskipun mixing test terkoreksi dan FVIII rendah.',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: aPTT yang memanjang (81 detik) dengan PT normal dan koreksi pada mixing test mendukung defisiensi faktor jalur intrinsik. FVIII sangat rendah (1%) dan FIX normal (94%) kuat mengarah pada hemofilia A dalam konteks klinis/familial.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Cek kecukupan volume tabung sitrat, kemungkinan heparin, QC dan pemrosesan plasma platelet-poor sesuai SOP. Hasil aktivitas faktor sangat rendah perlu komunikasi tepat waktu.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Terapi faktor VIII dan pilihan profilaksis sesuai penilaian hematolog; ATLM membantu pemeriksaan monitoring yang dipesan.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Informasikan perlunya konsultasi dokter atas perdarahan sendi dan penanganan sampel keluarga bila diperlukan untuk evaluasi lanjutan.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A tidak sesuai profil; B bertentangan dengan FIX normal; D bukan tugas ATLM; E bertentangan dengan pola mixing test.',
+    pdfPageRef: 'Acuan: R2; R7 (Halaman 20 & 48)',
+  },
+  {
+    questionNumber: 37,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 37 | Inhibitor faktor VIII didapat',
+    caseTable: {
+      anamnesis:
+        'Perempuan 72 tahun sebelumnya tidak pernah mengalami gangguan perdarahan. Dalam sepekan timbul hematoma luas spontan di otot dan kulit.',
+      physicalExam:
+        'Ekimosis luas, pucat ringan, tanpa riwayat hemartrosis sejak kecil.',
+      doctorOrder:
+        'Dokter meminta PT, aPTT, mixing test segera dan setelah inkubasi 2 jam, kadar FVIII dan Bethesda inhibitor.',
+      labResults:
+        'PT normal; aPTT 96 detik; mixing test segera 52 detik dan setelah inkubasi 90 detik; FVIII <1%; Bethesda tinggi. Spesimen tidak terkontaminasi heparin menurut evaluasi.',
+      medicationContext:
+        'Dokter merencanakan konsultasi hematologi untuk penanganan perdarahan dan eliminasi inhibitor.',
+    },
+    questionText: 'Pertanyaan: Manakah simpulan ATLM yang paling tepat?',
+    options: {
+      A: 'Koreksi parsial awal lalu memanjang kembali setelah inkubasi dapat mencerminkan inhibitor bergantung waktu; verifikasi dan sampaikan segera hasil inhibitor FVIII yang sangat mungkin, tanpa menetapkan sendiri obat hemostatik.',
+      B: 'Semua hasil membuktikan defisiensi FVIII herediter sederhana.',
+      C: 'Hasil aPTT harus dianggap normal karena PT normal.',
+      D: 'ATLM meresepkan vitamin K sebagai terapi spesifik.',
+      E: 'Kadar FVIII yang sangat rendah bisa diabaikan karena pasien lanjut usia.',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Mixing test yang tidak mempertahankan koreksi setelah inkubasi (52 detik menjadi 90 detik) dapat menunjukkan inhibitor terhadap faktor, termasuk autoantibodi FVIII. FVIII sangat rendah (<1%) bersama titer inhibitor tinggi mendukung hemofilia A didapat.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Pastikan prosedur mixing test, inkubasi, QC, dan interferensi antikoagulan telah dievaluasi. Komunikasikan segera hasil kritis dan dokumentasikan bahwa pola mendukung inhibitor, dengan interpretasi akhir oleh dokter spesialis.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Pemilihan agen hemostatik dan terapi imunosupresif berisiko tinggi dan harus diputuskan oleh tim klinis.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Pasien perlu diberi informasi oleh dokter bahwa memar/perdarahan spontan memerlukan evaluasi cepat, serta penting melaporkan penggunaan antikoagulan atau obat lain.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: B bertentangan dengan riwayat dan hasil inhibitor; C menyesatkan; D dan E tidak aman.',
+    pdfPageRef: 'Acuan: R2; R7 (Halaman 21 & 49)',
+  },
+  {
+    questionNumber: 38,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 38 | INR tinggi palsu akibat tabung sitrat kurang isi',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 70 tahun memakai warfarin untuk fibrilasi atrium, menjalani pemeriksaan INR rutin. Dua hari sebelumnya INR 2,5.',
+      physicalExam:
+        'Tidak ada perdarahan gusi, melena, memar baru atau perubahan tanda vital.',
+      doctorOrder:
+        'Dokter meminta PT/INR untuk penyesuaian obat. Petugas phlebotomy mencatat kesulitan venipungsi dan volume sampel hanya sekitar 60% tanda pada tabung sitrat.',
+      labResults:
+        'Analyzer memberi INR 5,4. QC laboratorium normal. Tabung sitrat terlihat jelas kurang terisi; hematokrit 43%; tidak tersedia sampel valid lain.',
+      medicationContext:
+        'Pasien bertanya apakah dosis warfarin harus langsung dihentikan saat itu juga.',
+    },
+    questionText: 'Pertanyaan: Tindakan ATLM terbaik ialah ...',
+    options: {
+      A: 'Segera mengubah dosis warfarin pasien berdasarkan angka 5,4.',
+      B: 'Mengabaikan catatan phlebotomy karena QC alat baik.',
+      C: 'Melaporkan INR 5,4 sebagai final tanpa komentar.',
+      D: 'Mengidentifikasi sampel koagulasi tidak memenuhi kriteria volume, meminta pengambilan ulang segera dan memberitahu klinisi bahwa hasil awal berpotensi artifisial; keputusan obat tetap oleh dokter.',
+      E: 'Menambahkan saline agar volume tabung tampak penuh lalu ulang analisis.',
+    },
+    correctOption: 'D',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Tabung sitrat kurang terisi (60%) mengubah perbandingan plasma dan sitrat sehingga uji koagulasi dapat tampak memanjang palsu (INR 5,4). QC alat yang baik tidak dapat mengatasi kesalahan preanalitik.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Tolak/nyatakan tidak dapat diterima menurut SOP, lakukan pencatatan insiden pengambilan, komunikasikan kepada dokter mengingat pasien memakai warfarin, dan ulang sampel yang terisi benar.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Penghentian atau perubahan dosis warfarin dilakukan dokter setelah memperoleh informasi sah dan menilai risiko trombosis/perdarahan.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Jelaskan kepada pasien perlunya sampel ulang dan minta pasien tidak mengubah obat berdasarkan hasil yang belum tervalidasi.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A, C menggunakan hasil invalid; B salah menilai QC; E mengubah komposisi sampel secara tidak sah.',
+    pdfPageRef: 'Acuan: R2 (Halaman 22 & 50)',
+  },
+  {
+    questionNumber: 39,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 39 | PT normal pada pasien memakai apixaban',
+    caseTable: {
+      anamnesis:
+        'Perempuan 76 tahun menggunakan apixaban karena fibrilasi atrium. Ia datang dengan melena dan kelemahan, lalu tim darurat menanyakan keberadaan efek antikoagulan.',
+      physicalExam: 'Pucat, tekanan darah 93/60 mmHg, nadi 115/menit.',
+      doctorOrder:
+        'Dokter meminta CBC, PT/INR, aPTT dan jika ada, anti-faktor Xa yang dikalibrasi untuk apixaban. Waktu dosis terakhir ditelusuri.',
+      labResults:
+        'Hb 7,3 g/dL; PT/INR mendekati normal; aPTT mendekati normal; sampel sitrat terisi sesuai dan tidak hemolisis. Metode PT/aPTT lokal kurang sensitif terhadap apixaban.',
+      medicationContext:
+        'Dosis apixaban terakhir sekitar 4 jam sebelum darah diambil. Dokter akan memutuskan intervensi dan kemungkinan reversal sesuai derajat perdarahan.',
+    },
+    questionText:
+      'Pertanyaan: Pernyataan ATLM yang paling tepat ketika menghubungi dokter adalah ...',
+    options: {
+      A: 'PT normal membuktikan apixaban tidak ada dalam darah.',
+      B: 'PT/aPTT normal tidak dapat menyingkirkan efek apixaban; informasikan keterbatasan uji dan siapkan pemeriksaan anti-Xa terkalibrasi obat jika tersedia, sambil memprioritaskan laporan Hb sesuai SOP.',
+      C: 'INR selalu setara dengan konsentrasi apixaban.',
+      D: 'ATLM memerintahkan antidot segera tanpa konsultasi.',
+      E: 'Kadar Hb tidak berhubungan dengan kebutuhan komunikasi hasil.',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Respons PT/aPTT terhadap direct factor Xa inhibitor (apixaban) bervariasi menurut reagen. Hasil normal tidak membuktikan tidak ada kadar obat bermakna. Waktu dosis (4 jam lalu), fungsi ginjal dan metode uji perlu diperhitungkan.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Laporkan keterbatasan metode kepada peminta; gunakan pemeriksaan drug-calibrated anti-Xa jika tersedia/terindikasi, dan pastikan hasil Hb (7,3 g/dL) ditangani sesuai nilai kritis lokal. Catat waktu dosis dalam permintaan.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Keputusan menunda antikoagulan, pemberian reversal atau transfusi adalah wewenang tim klinis.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Jelaskan bahwa satu hasil PT/INR normal tidak cukup untuk menyimpulkan keamanan obat dan tindak lanjut bergantung dokter.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A dan C menyalahgunakan indikator; D melampaui wewenang; E mengabaikan keselamatan.',
+    pdfPageRef: 'Acuan: R2; R7 (Halaman 23 & 51)',
+  },
+  {
+    questionNumber: 40,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 40 | MCHC sangat tinggi pada cold agglutinin',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 66 tahun memiliki keluhan jari membiru saat cuaca dingin. Sampel darah diantar melalui jalur yang dingin.',
+      physicalExam:
+        'Akral tampak pucat kebiruan, tidak ada perdarahan aktif.',
+      doctorOrder:
+        'Dokter meminta CBC untuk anemia. Analyzer menunjukkan flag RBC agglutination dan ketidaksesuaian antar-indeks.',
+      labResults:
+        'Hb 11,6 g/dL; RBC 1,9 juta/uL; Ht 20%; MCV 124 fL; MCHC 58 g/dL. Apusan awal menunjukkan gerombol eritrosit. Hemolisis tidak menonjol.',
+      medicationContext:
+        'Belum ada terapi. Dokter akan mengevaluasi cold agglutinin dan hemolisis jika hasil darah mendukung.',
+    },
+    questionText: 'Pertanyaan: Tindakan analitik ATLM terbaik adalah ...',
+    options: {
+      A: 'Menyimpulkan eritrosit hiperkromik sejati dengan MCHC 58 g/dL.',
+      B: 'Mengganti Hb menjadi 15 g/dL agar rumus lebih sesuai.',
+      C: 'Memproses ulang sesuai prosedur tervalidasi, termasuk pemanasan sampel ke 37 C bila cocok untuk alat/metode dan telaah apusan, lalu mendokumentasikan perbedaan sebelum dan sesudah koreksi.',
+      D: 'Mengabaikan flag karena hematokrit tetap tercetak.',
+      E: 'Meresepkan kortikosteroid dari nilai MCHC.',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Cold agglutinin dapat menyebabkan penggumpalan RBC in vitro yang menurunkan jumlah eritrosit terhitung (1,9 juta/uL) dan mengubah MCV/Ht sehingga MCH/MCHC tampak sangat tinggi (58 g/dL). Nilai MCHC ekstrem adalah petunjuk interferensi.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Evaluasi suhu, waktu dan metode pengukuran, lakukan langkah penghangatan/re-run (inkubasi 37°C) yang sudah tervalidasi, periksa smear dan dokumentasikan hasil yang layak dilaporkan. Bila tidak dapat diperbaiki, laporkan keterbatasan.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Penilaian penyakit cold agglutinin dan pilihan obat adalah ranah klinisi; koreksi analitik tidak sama dengan mengobati pasien.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Edukasi bahwa pengambilan dan pengangkutan sampel mungkin membutuhkan prosedur khusus (dijaga hangat); pasien tidak perlu menafsirkan sendiri angka awal yang terinterferensi.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A gagal mengenali artefak; B memalsukan data; D mengabaikan QC; E di luar kompetensi.',
+    pdfPageRef: 'Acuan: R1 (Halaman 24 & 52)',
+  },
+  {
+    questionNumber: 41,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 41 | Lipemia berat mengganggu pengukuran Hb',
+    caseTable: {
+      anamnesis:
+        'Perempuan 52 tahun dengan diabetes dan hipertrigliseridemia menjalani CBC untuk pemeriksaan kesehatan. Tidak ada keluhan hipoksia berat.',
+      physicalExam:
+        'Keadaan umum stabil, tidak tampak plethoric dan tidak ada tanda dehidrasi nyata.',
+      doctorOrder:
+        'Dokter meminta konfirmasi Hb yang tidak sesuai hasil sebelumnya 12,8 g/dL.',
+      labResults:
+        'Hb fotometrik 18,4 g/dL; RBC 4,1 juta/uL; Ht 36%; MCHC 51,1 g/dL. Plasma setelah sentrifugasi tampak sangat keruh/milky. QC alat memadai, tidak terlihat agregat RBC.',
+      medicationContext:
+        'Pasien belum memakai obat baru. Dokter mempertimbangkan evaluasi lipid dan ulang darah sebelum menilai polisitemia.',
+    },
+    questionText: 'Pertanyaan: Pendekatan ATLM yang paling tepat adalah ...',
+    options: {
+      A: 'Mencurigai interferensi kekeruhan/lipemia pada pengukuran Hb, menggunakan prosedur koreksi yang tervalidasi untuk instrumen bila tersedia dan mengomunikasikan hasil yang belum valid ke dokter.',
+      B: 'Menetapkan polisitemia vera dari Hb saja.',
+      C: 'Mengurangi nilai Hb 30% dengan perkiraan tanpa validasi.',
+      D: 'Mengganti hasil RBC dari 4,1 menjadi 6,1 juta/uL.',
+      E: 'Memberi obat penurun trigliserida kepada pasien.',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Kekeruhan (lipemia berat) dapat mengganggu pembacaan optik/fotometrik pada metode Hb tertentu sehingga Hb terbaca tinggi palsu (18,4 g/dL). MCHC jauh di atas kisaran fisiologis (51,1 g/dL) dan diskrepansi dengan Ht (36%)/RBC (4,1 juta/uL) memicu evaluasi interferensi, bukan diagnosis polisitemia.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Periksa keadaan sampel, hematokrit dan parameter analyzer. Ikuti prosedur terkualifikasi, misalnya penggantian plasma isovolumetrik (plasma replacement) atau metode alternatif bila disetujui instrumen/laboratorium. Jangan gunakan perbaikan arbitrer.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Pemilihan terapi dislipidemia atau evaluasi eritrositosis dilakukan dokter setelah data laboratorium sah tersedia.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Terangkan bahwa pemeriksaan ulang atau metode tambahan bertujuan mencegah keputusan medis berdasarkan angka yang mungkin palsu.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: B mengabaikan diskrepansi; C/D memalsukan hasil; E melampaui kompetensi.',
+    pdfPageRef: 'Acuan: R1; R8 (Halaman 25 & 53)',
+  },
+  {
+    questionNumber: 42,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 42 | Uji silang positif pada persiapan transfusi',
+    caseTable: {
+      anamnesis:
+        'Perempuan 35 tahun dengan anemia simptomatik dan riwayat transfusi setelah persalinan sebelumnya. Kini dirawat karena Hb rendah.',
+      physicalExam: 'Pucat, nadi 108/menit, tekanan darah 103/70 mmHg.',
+      doctorOrder:
+        'Dokter meminta golongan darah dan skrining antibodi sebelum menyiapkan PRC. Tidak ada perintah pelepasan darah darurat tanpa crossmatch.',
+      labResults:
+        'Golongan O RhD positif. Antibody screen IAT positif. Uji silang dengan unit donor O positif yang dipilih menunjukkan inkompatibilitas pada fase antiglobulin. Identitas sampel pasien telah dikonfirmasi.',
+      medicationContext:
+        'Pasien mengatakan sebelumnya pernah mengalami reaksi setelah transfusi. Dokter akan menilai urgensi transfusi.',
+    },
+    questionText:
+      'Pertanyaan: Keputusan ATLM/bank darah yang paling aman ialah ...',
+    options: {
+      A: 'Melepas unit inkompatibel karena ABO sama.',
+      B: 'Menyatakan semua antibodi tak bermakna karena RhD positif.',
+      C: 'Mencampur sampel pasien dengan darah donor lalu memutuskan secara visual saja.',
+      D: 'Memastikan identitas/ABO, melakukan identifikasi antibodi dan pemilihan unit antigen-negatif yang kompatibel sesuai SOP, serta berkoordinasi dengan dokter bank darah dan klinisi mengenai ketersediaan waktu.',
+      E: 'Memberikan premedikasi secara mandiri lalu mengizinkan unit inkompatibel.',
+    },
+    correctOption: 'D',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Kesamaan ABO/RhD tidak menyingkirkan aloantibodi ireguler terhadap antigen eritrosit lain (misal Kell, Duffy, Kidd, MNS) akibat sensitisasi transfusi/kehamilan sebelumnya. Skrining antibodi positif dan crossmatch inkompatibel harus diselidiki sebelum produk diberikan, kecuali prosedur darurat khusus disahkan dokter.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Konfirmasi identitas, lakukan uji panel identifikasi antibodi dan pemilihan unit donor antigen-negatif yang kompatibel, serta dokumentasikan komunikasi dan status produk.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Terapi transfusi, urgensi dan medikasi terkait diputuskan oleh dokter. ATLM tidak boleh melepas unit inkompatibel berdasarkan penilaian sendiri.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Jelaskan kepada pasien bahwa pemeriksaan kecocokan tambahan dapat memakan waktu untuk menurunkan risiko reaksi transfusi.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A/B mengabaikan antibodi ireguler; C tidak valid; E tidak mengatasi inkompatibilitas.',
+    pdfPageRef: 'Acuan: R6; R7 (Halaman 26 & 54)',
+  },
+  {
+    questionNumber: 43,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 43 | Reaksi hemolitik akut selama transfusi',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 55 tahun menjalani transfusi PRC. Setelah sekitar 15 menit mengeluh nyeri pinggang, menggigil, sesak dan urine menjadi gelap.',
+      physicalExam:
+        'Demam naik, tekanan darah turun dari 120/75 menjadi 85/55 mmHg, nadi 130/menit.',
+      doctorOrder:
+        'Dokter menghentikan transfusi dan meminta pemeriksaan reaksi transfusi, termasuk ulang ABO/crossmatch, DAT, penanda hemolisis, dan bila sesuai kultur komponen/pasien.',
+      labResults:
+        'Pra-transfusi DAT negatif; pasca-transfusi DAT positif. Plasma pasca-transfusi kemerahan; LDH dan bilirubin meningkat. Label kantong dan identitas sampel perlu audit ulang.',
+      medicationContext:
+        'Tim klinis memberikan suportif dan mempertimbangkan tata laksana syok; transfusi tidak dilanjutkan.',
+    },
+    questionText: 'Pertanyaan: Apa langkah ATLM prioritas?',
+    options: {
+      A: 'Menyuruh pasien menunggu karena semua demam transfusi ringan.',
+      B: 'Memverifikasi identitas pasien-kantong-sampel dan menjalankan algoritme investigasi reaksi transfusi, termasuk ulang pemeriksaan ABO/crossmatch dan DAT serta hemolisis, sambil segera melapor kepada dokter bank darah.',
+      C: 'Mengulang transfusi dari kantong yang sama agar cepat selesai.',
+      D: 'Memberikan antibiotik secara mandiri sebelum evaluasi produk darah.',
+      E: 'Menyatakan penyebab pasti adalah alergi ringan tanpa pemeriksaan.',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Hipotensi, nyeri pinggang, hemoglobinuria/plasma kemerahan serta DAT baru positif dan penanda hemolisis menunjang kecurigaan reaksi transfusi hemolitik akut. Ketidaksesuaian ABO akibat salah identitas (clerical error) harus diselidiki cepat.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Segera amankan/serahkan sisa komponen darah dan sampel sesuai SOP, cek identitas secara terpisah, lakukan pengujian ulang ABO/Rh, crossmatch, DAT, serta dokumentasikan hasil dan komunikasi. Kultur diindikasikan jika ada kecurigaan kontaminasi bakteri.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Menghentikan transfusi dan tata laksana syok/ginjal pada pasien dilakukan tim klinis. ATLM mendukung investigasi, bukan meresepkan obat.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Edukasi pasien oleh dokter mencakup dokumentasi reaksi pada rekam medis dan penyampaian riwayat reaksi pada kunjungan berikutnya.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A/C berbahaya; D bukan tugas ATLM; E mengabaikan bukti hemolisis.',
+    pdfPageRef: 'Acuan: R6; R9 (Halaman 27 & 55)',
+  },
+  {
+    questionNumber: 44,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 44 | Malaria dan pelaporan parasitemia mendesak',
+    caseTable: {
+      anamnesis:
+        'Laki-laki 30 tahun baru pulang dari daerah endemis malaria. Selama 4 hari mengalami demam menggigil, nyeri kepala dan muntah.',
+      physicalExam:
+        'Suhu 39,5 C, nadi 120/menit, sklera agak ikterik, tampak lemah.',
+      doctorOrder:
+        'Dokter meminta RDT malaria, apusan darah tebal-tipis STAT, CBC dan penilaian kepadatan parasit; terapi akan ditentukan sesudah penilaian tingkat keparahan.',
+      labResults:
+        'RDT malaria negatif, tetapi apusan tipis berkualitas baik menunjukkan parasit malaria pada 6% eritrosit yang dihitung; apusan tebal positif. Hb 9,4 g/dL, trombosit 68.000/uL. Spesies sedang diverifikasi.',
+      medicationContext:
+        'Pasien belum mengonsumsi antimalaria. Tim klinis mempertimbangkan tata laksana malaria berat berdasarkan parasitemia dan kondisi.',
+    },
+    questionText: 'Pertanyaan: Pilihan tindakan ATLM terbaik adalah ...',
+    options: {
+      A: 'Memprioritaskan konfirmasi mikroskopis, menghitung dan melaporkan parasitemia 6% serta kecurigaan malaria kepada dokter segera; RDT negatif tidak membatalkan apusan positif yang valid.',
+      B: 'Mengeluarkan hasil "malaria negatif" karena RDT negatif.',
+      C: 'Menunda seluruh informasi sampai pemeriksaan PCR di laboratorium rujukan selesai.',
+      D: 'Memberikan kombinasi antimalaria langsung dari laboratorium.',
+      E: 'Mengabaikan hitung trombosit karena malaria hanya berkaitan dengan eritrosit.',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: Apusan darah mikroskopis (baku emas) positif mengonfirmasi infeksi parasit malaria meski RDT negatif (misal akibat prozone effect, mutasi delesi pfhrp2/3, atau jenis antigen RDT). Parasit pada 6% eritrosit menunjukkan beban parasit tinggi (hiperparasitemia) yang berpotensi memenuhi kriteria malaria berat.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Verifikasi spesies dan kuantifikasi parasitemia oleh mikroskopis kompeten, gunakan apusan tebal-tipis sesuai standar, laporkan hasil STAT dan minta pemeriksaan konfirmasi bila perlu tanpa menunda tindakan.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Dokter memilih obat antimalaria dan rute pemberian berdasarkan spesies, keparahan, serta kebijakan setempat; pada malaria berat terapi segera sangat penting.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Jelaskan perlunya pemeriksaan apusan serial sesuai instruksi dokter untuk memantau penurunan kepadatan parasit dan bahwa hasil RDT negatif tidak otomatis meniadakan penyakit.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: B/C menunda pengenalan infeksi darurat; D di luar kewenangan; E mengabaikan data trombositopenia terkait.',
+    pdfPageRef: 'Acuan: R10 (CDC Malaria Diagnosis — Halaman 28 & 56)',
+  },
+  {
+    questionNumber: 45,
+    sectionCode: 'C',
+    category: 'clinical_case',
+    topic: 'KASUS 45 | Demam neutropenia pascakemoterapi',
+    caseTable: {
+      anamnesis:
+        'Perempuan 43 tahun hari ke-10 setelah kemoterapi mengalami menggigil dan demam sejak pagi, disertai sariawan.',
+      physicalExam:
+        'Suhu 39,2 C, tekanan darah 90/55 mmHg, nadi 125/menit, mukosa mulut meradang.',
+      doctorOrder:
+        'Dokter UGD meminta CBC diferensial STAT, kultur darah dan tes infeksi lain sesuai penilaian. Dokter mempertimbangkan antibiotik empiris segera.',
+      labResults:
+        'WBC 700/uL; neutrofil segmen 15% dan batang 5%, sehingga ANC = 140/uL; Hb 9,2 g/dL; trombosit 35.000/uL. Tidak ada clump, QC valid.',
+      medicationContext:
+        'Pasien menjalani kemoterapi sitotoksik, belum diberi antibiotik dalam episode ini.',
+    },
+    questionText: 'Pertanyaan: Prioritas ATLM yang paling tepat ialah ...',
+    options: {
+      A: 'Menunggu hari berikutnya karena leukopenia diharapkan setelah kemoterapi.',
+      B: 'Menganggap ANC tinggi karena neutrofil 20% tampak normal secara persentase.',
+      C: 'Menyarankan antibiotik yang tersedia di rumah tanpa menilai alergi.',
+      D: 'Menghitung/mengecek ANC, memverifikasi sampel dan segera mengomunikasikan neutropenia berat beserta hasil kritis kepada dokter; membantu kultur sesuai order tanpa menunda penatalaksanaan klinis.',
+      E: 'Mengabaikan tanda vital karena hanya hasil laboratorium yang relevan.',
+    },
+    correctOption: 'D',
+    scientificExplanation:
+      '1. Dasar penalaran laboratorium: ANC = 700 × (15+5)/100 = 140/uL, yaitu neutropenia berat (<500/uL). Demam (39,2°C) dan hipotensi dalam kondisi ini mengarah pada kegawatan infeksi (febrile neutropenia). Persentase neutrofil tidak boleh dinilai tanpa hitung absolut.',
+    atlmProcedureAndDecision:
+      '2. Prosedur dan keputusan ATLM: Periksa CBC dan morfologi bila flag, pastikan nilai ANC benar serta hasil kritis disampaikan segera dan tercatat. Kultur diambil sesuai permintaan dan protokol asepsis, tetapi kerja laboratorium tidak boleh menyebabkan penundaan antibiotik yang diputuskan dokter.',
+    doctorClinicalExplanation:
+      '3. Hubungan dengan terapi/obat dokter: Dokter memilih antibiotik empiris spektrum luas segera dan perawatan berdasarkan kondisi pasien, alergi, pola resistensi dan protokol. ATLM memantau hematologi dan kultur.',
+    patientEducation:
+      '4. Edukasi dan komunikasi: Berikan informasi proses pemeriksaan kepada pasien dan anjurkan segera melaporkan demam, menggigil, perdarahan, atau gejala infeksi kepada tim perawatan.',
+    whyOthersWrong:
+      '5. Mengapa pilihan lain keliru: A/B salah menilai ANC; C melampaui kewenangan; E mengabaikan kegawatan.',
+    calculationSteps: 'ANC = 700 × (15 + 5) / 100 = 700 × 0,20 = 140/uL (< 500/uL → Neutropenia Berat).',
+    pdfPageRef: 'Acuan: R1; R7 (Halaman 29 & 57)',
+  },
+
+  // ===========================================================================
+  // BAGIAN D: 5 SOAL PERHITUNGAN MCV, MCH, MCHC (NOMOR 46 - 50)
+  // Kerjakan ketiganya sekaligus; telaah apakah hasil dapat divalidasi
+  // ===========================================================================
+  {
+    questionNumber: 46,
+    sectionCode: 'D',
+    category: 'calculation',
+    topic: 'SOAL 46 | Hitung tiga indeks: anemia mikrositik',
+    questionText:
+      'Hasil CBC yang sudah lolos QC: Hb 9,0 g/dL; hematokrit 30%; eritrosit 4,00 juta/uL. Hitung MCV, MCH dan MCHC, lalu pilih klasifikasi yang benar.',
+    options: {
+      A: 'MCV 90 fL; MCH 22,5 pg; MCHC 30 g/dL, normositik',
+      B: 'MCV 75 fL; MCH 30 pg; MCHC 22,5 g/dL',
+      C: 'MCV 75 fL; MCH 22,5 pg; MCHC 30 g/dL, mikrositik-hipokromik',
+      D: 'MCV 30 fL; MCH 9 pg; MCHC 75 g/dL',
+      E: 'MCV 100 fL; MCH 33,3 pg; MCHC 30 g/dL',
+    },
+    correctOption: 'C',
+    scientificExplanation:
+      'MCV (fL) = Ht (%) × 10 / RBC (juta/uL) = 30 × 10 / 4,00 = 75 fL (<80 fL → mikrositik). MCH (pg) = Hb (g/dL) × 10 / RBC = 9,0 × 10 / 4,00 = 22,5 pg. MCHC (g/dL) = Hb × 100 / Ht (%) = 9,0 × 100 / 30 = 30 g/dL (<32 g/dL → hipokromik). MCV <80 dan MCHC rendah mendukung mikrositik-hipokromik.',
+    atlmProcedureAndDecision:
+      'Cek apusan darah tepi untuk mengonfirmasi mikrositosis hipokromik serta laporkan ketiga indeks yang telah tervalidasi.',
+    doctorClinicalExplanation:
+      'Ketiga indeks tidak menegakkan etiologi sendirian; dokter mengintegrasikannya dengan pemeriksaan ferritin, profil besi, atau elektroforesis Hb.',
+    patientEducation:
+      'Menjelaskan bahwa ukuran dan kepekatan warna sel darah merah berada di bawah rentang acuan dewasa.',
+    whyOthersWrong:
+      'A salah menghitung MCV; B menukar nilai MCH dan MCHC; D tidak mengalikan faktor 10 dan 100; E salah menghitung MCV dan MCH.',
+    calculationSteps:
+      'MCV = (30 × 10) / 4,00 = 75 fL | MCH = (9,0 × 10) / 4,00 = 22,5 pg | MCHC = (9,0 × 100) / 30 = 30 g/dL (Mikrositik-Hipokromik).',
+    pdfPageRef: 'Acuan: M1 (PDF ANFIS Darah Hal. 23 & 40); R1 (Halaman 30 & 58)',
+  },
+  {
+    questionNumber: 47,
+    sectionCode: 'D',
+    category: 'calculation',
+    topic: 'SOAL 47 | Hitung tiga indeks: anemia makrositik',
+    questionText:
+      'Pada sampel valid diperoleh Hb 11,5 g/dL; hematokrit 33%; eritrosit 3,00 juta/uL. Hasil perhitungan indeks yang benar adalah ...',
+    options: {
+      A: 'MCV 90 fL; MCH 32,0 pg; MCHC 36 g/dL',
+      B: 'MCV 33 fL; MCH 11,5 pg; MCHC 3 g/dL',
+      C: 'MCV 110 fL; MCH 34,8 pg; MCHC 38,3 g/dL',
+      D: 'MCV 100 fL; MCH 20 pg; MCHC 30 g/dL',
+      E: 'MCV 110 fL; MCH 38,3 pg; MCHC 34,8 g/dL, makrositik dengan konsentrasi Hb eritrosit relatif normal',
+    },
+    correctOption: 'E',
+    scientificExplanation:
+      'MCV = 33 × 10 / 3,00 = 110 fL (>100 fL → makrositik). MCH = 11,5 × 10 / 3,00 = 38,33 pg (~38,3 pg). MCHC = 11,5 × 100 / 33 = 34,85 g/dL (~34,8 g/dL, berada dalam kisaran normal 32–36 g/dL). MCH dapat tinggi karena ukuran eritrosit besar, sementara MCHC masih normal; jangan menukar kedua parameter.',
+    atlmProcedureAndDecision:
+      'Periksa makro-ovalosit, neutrofil hipersegmentasi pada apusan darah, serta hitung retikulosit dan status B12/folat bila diindikasikan.',
+    doctorClinicalExplanation:
+      'Anemia makrositik normokromik (MCV 110 fL, MCHC 34,8 g/dL) mengarahkan evaluasi klinis pada anemia megaloblastik atau makrositosis non-megaloblastik.',
+    patientEducation:
+      'Menjelaskan bahwa ukuran rata-rata sel darah merah lebih besar dari normal namun konsentrasi hemoglobin per volume sel tetap normal.',
+    whyOthersWrong:
+      'A dan D tidak sesuai perhitungan; B tidak memakai rumus faktor pengali; C menukar hasil MCH (38,3 pg) dengan MCHC (34,8 g/dL).',
+    calculationSteps:
+      'MCV = (33 × 10) / 3,00 = 110 fL | MCH = (11,5 × 10) / 3,00 = 38,3 pg | MCHC = (11,5 × 100) / 33 = 34,8 g/dL.',
+    pdfPageRef: 'Acuan: M1; R1 (Halaman 30 & 58)',
+  },
+  {
+    questionNumber: 48,
+    sectionCode: 'D',
+    category: 'calculation',
+    topic: 'SOAL 48 | Hitung tiga indeks: hipokromia berat',
+    questionText:
+      'CBC: Hb 9,6 g/dL, hematokrit 32%, eritrosit 4,80 juta/uL. Berapa MCV, MCH, MCHC?',
+    options: {
+      A: '66,7 fL; 20 pg; 30 g/dL',
+      B: '100 fL; 20 pg; 30 g/dL',
+      C: '66,7 fL; 30 pg; 20 g/dL',
+      D: '80 fL; 24 pg; 34 g/dL',
+      E: '32 fL; 4,8 pg; 9,6 g/dL',
+    },
+    correctOption: 'A',
+    scientificExplanation:
+      'MCV = 32 × 10 / 4,80 = 66,67 fL (~66,7 fL). MCH = 9,6 × 10 / 4,80 = 20 pg. MCHC = 9,6 × 100 / 32 = 30 g/dL. Ketiganya menunjukkan eritrosit kecil (mikrositik) dengan Hb sel rendah (hipokromik).',
+    atlmProcedureAndDecision:
+      'Susun laporan deskriptif morfologi apusan darah dan dukung pemeriksaan lanjutan ferritin, profil besi, atau evaluasi hemoglobinopati sesuai order dokter.',
+    doctorClinicalExplanation:
+      'MCV 66,7 fL dengan RBC 4,80 juta/uL memerlukan pembedaan antara defisiensi besi dan trait talassemia.',
+    patientEducation:
+      'Menjelaskan hasil perhitungan indeks sel darah merah sebagai dasar penelusuran penyebab anemia.',
+    whyOthersWrong:
+      'B salah menghitung MCV; C menukar nilai MCH dan MCHC; D dan E tidak sesuai substitusi angka.',
+    calculationSteps:
+      'MCV = (32 × 10) / 4,80 = 66,7 fL | MCH = (9,6 × 10) / 4,80 = 20 pg | MCHC = (9,6 × 100) / 32 = 30 g/dL.',
+    pdfPageRef: 'Acuan: M1; R1 (Halaman 30 & 58)',
+  },
+  {
+    questionNumber: 49,
+    sectionCode: 'D',
+    category: 'calculation',
+    topic: 'SOAL 49 | Hitung tiga indeks: normositik normokromik',
+    questionText:
+      'Pasien sehat: Hb 14,0 g/dL, hematokrit 42%, eritrosit 4,50 juta/uL. Pilihan yang paling tepat adalah ...',
+    options: {
+      A: '42 fL; 14 pg; 4,5 g/dL',
+      B: '93,3 fL; 31,1 pg; 33,3 g/dL, normositik-normokromik',
+      C: '120 fL; 31,1 pg; 33,3 g/dL',
+      D: '93,3 fL; 20 pg; 22 g/dL',
+      E: '93,3 fL; 33,3 pg; 31,1 g/dL, makrositik',
+    },
+    correctOption: 'B',
+    scientificExplanation:
+      'MCV = 42 × 10 / 4,50 = 93,33 fL (~93,3 fL). MCH = 14,0 × 10 / 4,50 = 31,11 pg (~31,1 pg). MCHC = 14,0 × 100 / 42 = 33,33 g/dL (~33,3 g/dL). Nilai tersebut konsisten dengan pola normositik-normokromik (MCV 80–100 fL, MCHC 32–36 g/dL).',
+    atlmProcedureAndDecision:
+      'Perhatikan bahwa Rule of Three juga terpenuhi (Hb 14 × 3 = Hct 42%), menandakan konsistensi internal parameter eritrosit yang sangat baik.',
+    doctorClinicalExplanation:
+      'Profil eritrosit dan ketiga indeks berada dalam batas fisiologis normal dewasa.',
+    patientEducation:
+      'Menyampaikan bahwa ukuran, bobot muatan hemoglobin, dan kepekatan warna sel darah merah berada dalam kisaran sehat.',
+    whyOthersWrong:
+      'A hanya menyalin angka mentah; C dan D salah hitung; E menukar nilai MCH dan MCHC serta salah mengklasifikasikan 93,3 fL sebagai makrositik.',
+    calculationSteps:
+      'MCV = (42 × 10) / 4,50 = 93,3 fL | MCH = (14,0 × 10) / 4,50 = 31,1 pg | MCHC = (14,0 × 100) / 42 = 33,3 g/dL (Normositik-Normokromik).',
+    pdfPageRef: 'Acuan: M1; R1 (Halaman 30, 58–59)',
+  },
+  {
+    questionNumber: 50,
+    sectionCode: 'D',
+    category: 'calculation',
+    topic: 'SOAL 50 | Hitung tiga indeks sekaligus menilai interferensi',
+    questionText:
+      'Sebuah analyzer menghasilkan Hb 12,0 g/dL, hematokrit 30%, eritrosit 4,80 juta/uL. Hitung MCV, MCH, MCHC. Karena salah satu indeks tampak tidak fisiologis, pilih langkah ATLM terbaik.',
+    options: {
+      A: 'MCV 80 fL; MCH 25 pg; MCHC 30 g/dL. Lapor tanpa pemeriksaan.',
+      B: 'MCV 100 fL; MCH 40 pg; MCHC 25 g/dL. Berikan vitamin B12.',
+      C: 'MCV 62,5 fL; MCH 40 pg; MCHC 25 g/dL. Transfusi segera.',
+      D: 'MCV 30 fL; MCH 4,8 pg; MCHC 12 g/dL. Tidak ada interferensi.',
+      E: 'MCV 62,5 fL; MCH 25 pg; MCHC 40 g/dL. Telusuri interferensi/spesimen dan ulang melalui metode tervalidasi sebelum validasi hasil.',
+    },
+    correctOption: 'E',
+    scientificExplanation:
+      'MCV = 30 × 10 / 4,80 = 62,5 fL. MCH = 12,0 × 10 / 4,80 = 25 pg. MCHC = 12,0 × 100 / 30 = 40 g/dL. MCHC sebesar 40 g/dL (>36 g/dL) tidak fisiologis dan perlu memicu verifikasi, misalnya hemolisis in vitro, lipemia, aglutinasi eritrosit (cold agglutinin) atau ketidakcocokan pengukuran Hb/Ht. Jangan langsung menganggapnya kelainan hiperkromik sejati.',
+    atlmProcedureAndDecision:
+      'Cek kondisi visual plasma sampel (apakah lisis atau keruh/milky), periksa grafik histogram, flag alat, QC, dan apusan darah tepi (melihat sferosit atau aglutinasi), lalu lakukan pengukuran ulang/koreksi sesuai SOP sebelum merilis hasil.',
+    doctorClinicalExplanation:
+      'Verifikasi pra-analitik dan analitik terhadap MCHC >36 g/dL mencegah pelaporan kadar Hb atau Hct yang bias akibat interferensi.',
+    patientEducation:
+      'Menjelaskan bahwa laboratorium melakukan verifikasi mutu terhadap sampel untuk memastikan hasil bebas dari gangguan kekeruhan atau hemolisis.',
+    whyOthersWrong:
+      'A, B, C, dan D salah dalam perhitungan matematis dan mengabaikan protokol investigasi interferensi MCHC tinggi.',
+    calculationSteps:
+      'MCV = (30 × 10) / 4,80 = 62,5 fL | MCH = (12,0 × 10) / 4,80 = 25 pg | MCHC = (12,0 × 100) / 30 = 40 g/dL (> 36 g/dL → Curigai Interferensi!).',
+    pdfPageRef: 'Acuan: M1; R1 (Halaman 31 & 59)',
   },
 ];

@@ -91,7 +91,7 @@ const STUDENT_14_MENUS: { id: StudentMenuId; label: string; icon: React.ElementT
   { id: 'learning_materials', label: 'Learning Materials (35)', icon: BookOpen },
   { id: 'blood_cell_explorer', label: 'Blood Cell Explorer', icon: Droplets },
   { id: 'clinical_simulation', label: 'Clinical Case Simulation', icon: Stethoscope },
-  { id: 'hematology_quiz', label: 'Hematology Quiz (30)', icon: Play },
+  { id: 'hematology_quiz', label: 'Hematology Quiz (50 A–E)', icon: Play },
   { id: 'digital_calculator', label: 'Digital Calculator', icon: Calculator },
   { id: 'medical_glossary', label: 'Medical Glossary', icon: BookA },
   { id: 'leaderboard', label: 'Leaderboard 3D', icon: Trophy },
@@ -205,15 +205,15 @@ export default function App() {
   const [formFullName, setFormFullName] = useState<string>('');
   const [formNpm, setFormNpm] = useState<string>('');
   const [formClass, setFormClass] = useState<string>('ATLM Reguler A - IKES Rajawali');
-  const [formAccessCode, setFormAccessCode] = useState<string>('121201');
+  const [formAccessCode, setFormAccessCode] = useState<string>('040186');
   const [formGender, setFormGender] = useState<'male_atlm' | 'female_atlm'>('female_atlm');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
 
-  // Lecturer Login Form
-  const [lecturerBootstrapCode, setLecturerBootstrapCode] = useState<string>('');
-  const [lecturerUsername, setLecturerUsername] = useState<string>('');
-  const [lecturerPassword, setLecturerPassword] = useState<string>('');
+  // Lecturer Login Form (Default easy activation code: 040186)
+  const [lecturerBootstrapCode, setLecturerBootstrapCode] = useState<string>('040186');
+  const [lecturerUsername, setLecturerUsername] = useState<string>('dr.juwita');
+  const [lecturerPassword, setLecturerPassword] = useState<string>('040186');
   const [lecturerTab, setLecturerTab] = useState<'bootstrap' | 'credentials'>('bootstrap');
 
   // Learning Modules State
@@ -388,7 +388,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Google Sign-In error:', error);
-      setAuthError('Login Google dibatalkan atau gagal. Gunakan Kode Akses Dosen (121201).');
+      setAuthError('Login Google dibatalkan atau gagal. Gunakan Kode Aktivasi Dosen (040186).');
     }
   };
 
@@ -565,21 +565,21 @@ export default function App() {
         {activeMenu === 'home' && (
           <div className="space-y-8">
             {/* Hero Clinical & Academic Profile Card */}
-            <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950 border border-slate-800 p-6 md:p-10 text-white shadow-2xl relative overflow-hidden">
+            <div className="rounded-3xl bg-gradient-to-br from-[#233954] via-[#2b4666] to-[#23435e] border border-[#3d5c80] p-6 md:p-10 text-white shadow-xl relative overflow-hidden">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
                 {/* Left Column: Institution Logo, Author Profile & Headline */}
                 <div className="lg:col-span-7 space-y-5">
-                  <div className="inline-flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15">
+                  <div className="inline-flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/12 backdrop-blur-md border border-white/20">
                     <img
                       src="/assets/ikes_rajawali_logo.png"
                       alt="Logo Institut Kesehatan Rajawali"
                       className="w-12 h-12 rounded-full bg-white p-1 object-contain"
                     />
                     <div className="text-left">
-                      <p className="text-[11px] font-mono uppercase tracking-wider text-sky-300 font-bold">
+                      <p className="text-[11px] font-mono uppercase tracking-wider text-sky-200 font-bold">
                         INSTITUT KESEHATAN RAJAWALI • BANDUNG, INDONESIA
                       </p>
-                      <p className="text-xs text-slate-200 font-medium">
+                      <p className="text-xs text-slate-100 font-medium">
                         Fakultas Kesehatan • Program Studi Teknologi Laboratorium Medik (ATLM)
                       </p>
                     </div>
@@ -592,16 +592,18 @@ export default function App() {
                     <h2 className="text-3xl md:text-5xl font-bold tracking-tight mt-1 leading-tight">
                       HEMATOLOGY WORLD
                     </h2>
-                    <p className="text-lg md:text-xl text-sky-300 font-medium mt-1">
+                    <p className="text-lg md:text-xl text-sky-200 font-medium mt-1">
                       “Explore Blood. Analyze Results. Become a Hematology Expert.”
                     </p>
                   </div>
 
-                  <p className="text-sm md:text-base text-slate-200 leading-relaxed">
-                    Platform pembelajaran 3D Rumah Sakit & Laboratorium Hematologi Futuristik,
-                    Kalkulator Klinis Indeks Eritrosit (MCV, MCH, MCHC), Simulasi Alur Diagnostik
-                    ATLM-Dokter, serta Evaluasi Kompetensi 30 Soal ABCD Super Sulit berbasis modul
-                    resmi <strong>ANFIS DARAH (47 Halaman)</strong>.
+                  <p className="text-sm md:text-base text-slate-100 leading-relaxed">
+                    Platform pembelajaran 3D Rumah Sakit & Laboratorium Hematologi untuk Mahasiswa{' '}
+                    <strong>ATLM</strong>, dilengkapi Kalkulator Klinis Indeks Eritrosit (MCV, MCH,
+                    MCHC), Simulasi Alur Diagnostik ATLM-Dokter, serta Evaluasi Kompetensi{' '}
+                    <strong>50 Soal Pilihan Ganda (A–E)</strong> (10 Teori Dasar, 15 Gabungan CBC &
+                    QC, 20 Kasus Sangat Sulit lengkap Tabel Klinis, dan 5 Hitungan Indeks) karya{' '}
+                    <strong>dr. Juwita Ninda Suherman, M.Kes</strong>.
                   </p>
 
                   {/* Primary Action CTA Buttons */}
@@ -611,7 +613,7 @@ export default function App() {
                         soundManager.playDoor();
                         setActiveMenu('explore_hospital');
                       }}
-                      className="px-5 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg transition"
+                      className="px-5 py-3 rounded-xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-md transition"
                     >
                       <Compass className="w-4 h-4" /> Masuk Dunia 3D Rumah Sakit & Lab
                     </button>
@@ -620,30 +622,30 @@ export default function App() {
                         soundManager.playQuizStart();
                         setActiveMenu('hematology_quiz');
                       }}
-                      className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg transition"
+                      className="px-5 py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-md transition"
                     >
-                      <Play className="w-4 h-4 fill-current" /> Mulai Ujian 30 Soal ABCD
+                      <Play className="w-4 h-4 fill-current" /> Mulai Ujian 50 Soal A–E (ATLM)
                     </button>
                     <button
                       onClick={() => {
                         soundManager.playClick();
                         setActiveMenu('learning_materials');
                       }}
-                      className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold text-sm flex items-center gap-2 transition"
+                      className="px-5 py-3 rounded-xl bg-[#345275] hover:bg-[#3f628a] border border-sky-300/30 text-white font-semibold text-sm flex items-center gap-2 transition"
                     >
-                      <BookOpen className="w-4 h-4 text-sky-400" /> Baca 35 Modul & Slide PDF Asli
+                      <BookOpen className="w-4 h-4 text-sky-300" /> Baca 35 Modul & Slide PDF Asli
                     </button>
                   </div>
                 </div>
 
                 {/* Right Column: Official Clinical & Academic Profile Card of dr. Juwita Ninda Suherman, M.Kes */}
                 <div className="lg:col-span-5">
-                  <div className="bg-white text-slate-900 rounded-2xl p-6 shadow-2xl border-2 border-sky-400/50 space-y-4">
-                    <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
+                  <div className="bg-[#edf2f7] text-slate-900 rounded-2xl p-6 shadow-xl border-2 border-sky-300/60 space-y-4">
+                    <div className="flex items-center gap-4 pb-4 border-b border-slate-300">
                       <img
                         src="/assets/ikes_rajawali_logo.png"
                         alt="Logo Resmi Institut Kesehatan Rajawali"
-                        className="w-20 h-20 object-contain shrink-0 rounded-xl bg-slate-50 p-1.5 border border-slate-200"
+                        className="w-20 h-20 object-contain shrink-0 rounded-xl bg-white p-1.5 border border-slate-300"
                       />
                       <div>
                         <span className="px-2.5 py-0.5 rounded-md bg-sky-100 text-sky-800 font-mono text-[11px] font-bold uppercase">
@@ -655,8 +657,8 @@ export default function App() {
                         <p className="text-xs font-semibold text-sky-700">
                           Dosen Pengampu & Konsultan Pendidikan Hematologi Medik
                         </p>
-                        <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                        <p className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
+                          <Building2 className="w-3.5 h-3.5 text-slate-500" />
                           Institut Kesehatan Rajawali (IKES Rajawali) Bandung
                         </p>
                       </div>
@@ -677,18 +679,18 @@ export default function App() {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center font-mono">
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-300 text-center font-mono">
+                      <div className="p-2 rounded-lg bg-[#e2e8f0] border border-slate-300">
                         <p className="text-base font-bold text-sky-700">47 Hal</p>
-                        <p className="text-[10px] text-slate-500">Slide PDF Asli</p>
+                        <p className="text-[10px] text-slate-600">Slide PDF Asli</p>
                       </div>
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="p-2 rounded-lg bg-[#e2e8f0] border border-slate-300">
                         <p className="text-base font-bold text-emerald-700">35 Modul</p>
-                        <p className="text-[10px] text-slate-500">Kurikulum ATLM</p>
+                        <p className="text-[10px] text-slate-600">Kurikulum ATLM</p>
                       </div>
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
-                        <p className="text-base font-bold text-amber-600">30 Soal</p>
-                        <p className="text-[10px] text-slate-500">Kasus & Teori</p>
+                      <div className="p-2 rounded-lg bg-[#e2e8f0] border border-slate-300">
+                        <p className="text-base font-bold text-amber-700">50 Soal</p>
+                        <p className="text-[10px] text-slate-600">Pilihan A–E</p>
                       </div>
                     </div>
                   </div>
@@ -1303,8 +1305,8 @@ export default function App() {
             {lastQuizSummary && lastQuizReview.length > 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
                 <h3 className="text-lg font-bold text-slate-900">
-                  Ringkasan Pembahasan Percobaan Kuis Terakhir ({lastQuizSummary.correctCount}/30
-                  Benar — {lastQuizSummary.accuracyPercent}%)
+                  Ringkasan Pembahasan Percobaan Kuis Terakhir ({lastQuizSummary.correctCount}/{lastQuizSummary.totalQuestions}
+                  {' '}Benar — {lastQuizSummary.accuracyPercent}%)
                 </h3>
                 <button
                   onClick={() => setActiveMenu('hematology_quiz')}
@@ -1316,14 +1318,14 @@ export default function App() {
             ) : (
               <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
                 <p className="text-sm text-slate-600">
-                  Selesaikan 30 Soal Kuis Hematologi untuk membuka analisis skor dan pembahasan
-                  lengkap opsi A/B/C/D.
+                  Selesaikan 50 Soal Kuis Hematologi ATLM (A–E) untuk membuka analisis skor dan pembahasan
+                  lengkap 5 aspek laboratorium.
                 </p>
                 <button
                   onClick={() => setActiveMenu('hematology_quiz')}
                   className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold"
                 >
-                  Mulai Kuis 30 Soal Sekarang
+                  Mulai Kuis 50 Soal Sekarang
                 </button>
               </div>
             )}
@@ -1363,17 +1365,17 @@ export default function App() {
                 },
                 {
                   title: 'Clinical Case Specialist',
-                  desc: 'Menyelesaikan 20 Soal Kasus Klinis Sangat Sulit & 10 Soal Teori Hematologi.',
+                  desc: 'Menyelesaikan 50 Soal Pilihan Ganda (A–E) Hematologi ATLM beserta 20 Kasus Sangat Sulit.',
                   unlocked: studentSession.highestScore > 0,
                 },
                 {
                   title: 'Speed Diagnostic Star',
-                  desc: 'Menyelesaikan ujian 30 soal dengan akurasi ≥ 80% dan waktu cepat.',
+                  desc: 'Menyelesaikan ujian 50 soal dengan akurasi ≥ 80% dan waktu cepat.',
                   unlocked: studentSession.bestAccuracy >= 80,
                 },
                 {
                   title: 'Gold Hematology Champion',
-                  desc: 'Meraih akurasi ≥ 90% pada evaluasi 30 soal dan menembus Podium 3D Juara.',
+                  desc: 'Meraih akurasi ≥ 90% pada evaluasi 50 soal dan menembus Podium 3D Juara.',
                   unlocked: studentSession.bestAccuracy >= 90,
                 },
               ].map((b, idx) => (
@@ -1924,16 +1926,19 @@ export default function App() {
                   {lecturerTab === 'bootstrap' ? (
                     <div>
                       <label className="block font-bold uppercase text-slate-700 mb-1">
-                        Masukkan Kode Akses Dosen Pengampu
+                        Masukkan Kode Aktivasi Dosen Pengampu
                       </label>
                       <input
-                        type="password"
+                        type="text"
                         required
                         value={lecturerBootstrapCode}
                         onChange={(e) => setLecturerBootstrapCode(e.target.value)}
-                        placeholder="Masukkan kode akses dosen..."
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
+                        placeholder="040186"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900"
                       />
+                      <p className="text-[11px] text-sky-700 font-mono mt-1">
+                        Kode Aktivasi Dosen: <strong>040186</strong>
+                      </p>
                     </div>
                   ) : (
                     <>

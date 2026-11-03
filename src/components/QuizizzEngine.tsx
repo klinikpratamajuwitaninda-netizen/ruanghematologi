@@ -11,54 +11,57 @@ import {
   Calculator,
   Printer,
   RotateCcw,
-  Award,
   Sparkles,
   FileText,
   Stethoscope,
   Users,
   User,
+  ClipboardList,
+  AlertCircle,
 } from 'lucide-react';
+import type { ClinicalCaseTable, OptionKey } from '../data/quiz30Data';
 
 interface SanitizedQuestion {
   questionNumber: number;
-  category: 'clinical_case' | 'theory';
+  sectionCode: 'A' | 'B' | 'C' | 'D';
+  category: 'theory' | 'combined' | 'clinical_case' | 'calculation';
   topic: string;
+  caseTable?: ClinicalCaseTable | null;
   questionText: string;
   options: {
     A: string;
     B: string;
     C: string;
     D: string;
+    E: string;
   };
   pdfPageRef: string;
 }
 
 export interface DetailedReviewItem {
   questionNumber: number;
-  category: 'clinical_case' | 'theory';
+  sectionCode: 'A' | 'B' | 'C' | 'D';
+  category: 'theory' | 'combined' | 'clinical_case' | 'calculation';
   topic: string;
+  caseTable?: ClinicalCaseTable | null;
   questionText: string;
   options: {
     A: string;
     B: string;
     C: string;
     D: string;
+    E: string;
   };
-  studentAnswer: 'A' | 'B' | 'C' | 'D';
-  correctOption: 'A' | 'B' | 'C' | 'D';
+  studentAnswer: OptionKey;
+  correctOption: OptionKey;
   isCorrect: boolean;
   timeSpentSec: number;
   scientificExplanation: string;
-  optionRationales: {
-    A: string;
-    B: string;
-    C: string;
-    D: string;
-  };
-  calculationSteps?: string | null;
+  atlmProcedureAndDecision: string;
   doctorClinicalExplanation: string;
   patientEducation: string;
-  managementPlan: string;
+  whyOthersWrong: string;
+  calculationSteps?: string | null;
   pdfPageRef: string;
 }
 
@@ -88,6 +91,28 @@ interface QuizizzEngineProps {
   onViewLeaderboard?: () => void;
 }
 
+const SECTION_BADGE_MAP: Record<
+  'A' | 'B' | 'C' | 'D',
+  { label: string; style: string }
+> = {
+  A: {
+    label: 'BAGIAN A • TEORI DASAR & PRAKTIK ATLM (01–10)',
+    style: 'bg-sky-500/20 border-sky-300/40 text-sky-100',
+  },
+  B: {
+    label: 'BAGIAN B • GABUNGAN CBC, APUSAN & QC (11–25)',
+    style: 'bg-teal-500/20 border-teal-300/40 text-teal-100',
+  },
+  C: {
+    label: 'BAGIAN C • KASUS KLINIS SANGAT SULIT (26–45)',
+    style: 'bg-amber-500/20 border-amber-300/40 text-amber-100',
+  },
+  D: {
+    label: 'BAGIAN D • PERHITUNGAN MCV, MCH, MCHC & VALIDASI (46–50)',
+    style: 'bg-indigo-500/20 border-indigo-300/40 text-indigo-100',
+  },
+};
+
 export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
   studentNpm,
   studentName,
@@ -100,11 +125,11 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [stage, setStage] = useState<'lobby' | 'playing' | 'submitting' | 'review'>('lobby');
   const [quizMode, setQuizMode] = useState<'solo' | 'live'>('solo');
-  const [liveSessionCode, setLiveSessionCode] = useState<string>('ATLM-HEMATO-30');
+  const [liveSessionCode, setLiveSessionCode] = useState<string>('ATLM-HEMATO-50');
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedAnswers, setSelectedAnswers] = useState<
-    Record<number, { selectedOption: 'A' | 'B' | 'C' | 'D'; timeSpentSec: number }>
+    Record<number, { selectedOption: OptionKey; timeSpentSec: number }>
   >({});
   const [questionTimer, setQuestionTimer] = useState<number>(60);
   const [totalElapsedSec, setTotalElapsedSec] = useState<number>(0);
@@ -115,7 +140,7 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
   const [summaryResult, setSummaryResult] = useState<QuizSummaryResult | null>(null);
   const [detailedReview, setDetailedReview] = useState<DetailedReviewItem[]>([]);
   const [reviewFilter, setReviewFilter] = useState<
-    'all' | 'correct' | 'wrong' | 'clinical' | 'indices' | 'theory'
+    'all' | 'correct' | 'wrong' | 'secA' | 'secB' | 'secC' | 'secD'
   >('all');
 
   useEffect(() => {
@@ -156,7 +181,7 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
     setStage('playing');
   };
 
-  const handleSelectOption = (optionKey: 'A' | 'B' | 'C' | 'D') => {
+  const handleSelectOption = (optionKey: OptionKey) => {
     const currentQ = questions[currentIndex];
     if (!currentQ) return;
 
@@ -182,7 +207,7 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
       return;
     }
 
-    // Submit all 30 answers to backend for official grading
+    // Submit all 50 answers to backend for official grading
     setStage('submitting');
     try {
       const payloadAnswers = questions.map((q) => ({
@@ -225,97 +250,102 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
 
   if (loading) {
     return (
-      <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
-        <p className="text-sm font-mono text-slate-500">
-          Memuat 30 Soal Ujian Kompetensi Hematologi ATLM...
+      <div className="p-12 text-center bg-[#edf2f7] rounded-2xl border border-slate-300">
+        <p className="text-sm font-mono text-slate-600">
+          Memuat 50 Soal Ujian Kompetensi Hematologi ATLM (Pilihan Ganda A–E)...
         </p>
       </div>
     );
   }
 
   // ===========================================================================
-  // STAGE 1: QUIZIZZ-STYLE LOBBY (SOLO & LIVE MODE)
+  // STAGE 1: QUIZIZZ-STYLE LOBBY (SOLO & LIVE MODE - 50 SOAL A-E)
   // ===========================================================================
   if (stage === 'lobby') {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl bg-slate-900 border border-slate-800 p-8 text-white shadow-xl">
-          <div className="max-w-3xl">
-            <span className="text-xs font-mono uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" /> UJIAN KOMPETENSI HEMATOLOGI INTERAKTIF (QUIZIZZ EDITION)
+        <div className="rounded-2xl bg-[#243b55] border border-[#365374] p-7 md:p-8 text-slate-100 shadow-lg">
+          <div className="max-w-4xl">
+            <span className="text-xs font-mono uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4" /> UJIAN KOMPETENSI HEMATOLOGI UNTUK ATLM (EDISI 50 SOAL PILIHAN GANDA A–E)
             </span>
-            <h2 className="text-3xl font-bold mt-2">
-              30 Soal ABCD Super Sulit — Kasus Klinis & Teori Fisiologi Darah
+            <h2 className="text-2xl md:text-3xl font-bold mt-2 text-white">
+              50 Soal Hematologi untuk ATLM — Anatomi & Fisiologi Sistem Hematologi dengan Analisis Praktik Laboratorium
             </h2>
-            <p className="text-slate-300 text-sm mt-2 leading-relaxed">
-              Disusun langsung dari materi <strong>PDF ANFIS DARAH (47 Halaman)</strong> karya{' '}
+            <p className="text-slate-200 text-sm mt-2 leading-relaxed">
+              Disusun untuk Mahasiswa <strong>Ahli Teknologi Laboratorium Medik (ATLM)</strong> oleh{' '}
               <strong>dr. Juwita Ninda Suherman, M.Kes</strong> — Institut Kesehatan Rajawali Bandung.
-              Terdiri atas <strong>20 Soal Kasus Klinis Sangat Sulit</strong> (perhitungan MCV, MCH, MCHC,
-              ambang anemia WHO 2024, leukosit, trombosit, ABO/Rh) dan{' '}
-              <strong>10 Soal Teori Sangat Sulit</strong>.
+              Mencakup <strong>10 Soal Teori Dasar & Praktik ATLM</strong>,{' '}
+              <strong>15 Soal Gabungan CBC/Apusan/QC</strong>,{' '}
+              <strong>20 Soal Kasus Sangat Sulit (lengkap tabel klinis)</strong>, dan{' '}
+              <strong>5 Soal Perhitungan MCV, MCH, MCHC & Validasi</strong>.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
-              <p className="text-xs font-mono text-sky-300 uppercase">Komposisi Soal</p>
-              <p className="text-xl font-bold mt-1">30 Soal ABCD</p>
-              <p className="text-xs text-slate-400 mt-1">
-                20 Kasus Klinis + 10 Teori Mendalam (Tanpa kunci jawaban bocor sebelum selesai)
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-6">
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#426388]">
+              <p className="text-xs font-mono text-sky-200 uppercase">Bagian A (Soal 01–10)</p>
+              <p className="text-lg font-bold mt-1 text-white">10 Soal Teori ATLM</p>
+              <p className="text-xs text-slate-200 mt-1">
+                Fungsi darah, viskositas, hematokrit, Hb & methemoglobin, hemolisis, diapedesis, hemostasis, crossmatch
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
-              <p className="text-xs font-mono text-emerald-300 uppercase">Rumus Indeks Eritrosit</p>
-              <p className="text-xs font-mono mt-1.5 text-slate-200">
-                • MCV = (Hct × 10) / RBC [fL]
-                <br />• MCH = (Hb × 10) / RBC [pg]
-                <br />• MCHC = (Hb × 100) / Hct [g/dL]
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#426388]">
+              <p className="text-xs font-mono text-teal-200 uppercase">Bagian B (Soal 11–25)</p>
+              <p className="text-lg font-bold mt-1 text-white">15 Soal Gabungan</p>
+              <p className="text-xs text-slate-200 mt-1">
+                CBC, apusan darah tepi, NRBC, PT/aPTT, EDTA vs sitrat, cold agglutinin, nilai kritis & QC Westgard
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
-              <p className="text-xs font-mono text-amber-300 uppercase">Pembahasan Pasca-Kuis</p>
-              <p className="text-xl font-bold mt-1">100% Terbuka</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Rasional opsi A/B/C/D, substitusi angka, interpretasi dokter & edukasi pasien
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#426388]">
+              <p className="text-xs font-mono text-amber-200 uppercase">Bagian C (Soal 26–45)</p>
+              <p className="text-lg font-bold mt-1 text-white">20 Kasus Sangat Sulit</p>
+              <p className="text-xs text-slate-200 mt-1">
+                Dilengkapi Tabel Anamnesis, Pemeriksaan Fisik, Permintaan Dokter, Hasil Lab & Konteks Obat/Edukasi
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#426388]">
+              <p className="text-xs font-mono text-indigo-200 uppercase">Bagian D (Soal 46–50)</p>
+              <p className="text-lg font-bold mt-1 text-white">5 Hitungan Indeks</p>
+              <p className="text-xs text-slate-200 mt-1">
+                Perhitungan MCV = (Hct×10)/RBC, MCH = (Hb×10)/RBC, MCHC = (Hb×100)/Hct & Rule of Three
               </p>
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-7 grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Mode 1: Solo Quiz */}
-            <div className="p-5 rounded-2xl bg-sky-950/60 border border-sky-500/40 flex flex-col justify-between">
+            <div className="p-5 rounded-2xl bg-[#1d3249] border border-sky-400/35 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2 text-sky-300 text-xs font-mono uppercase font-bold">
-                  <User className="w-4 h-4" /> MODE 1: SOLO QUIZ (MANDIRI)
+                  <User className="w-4 h-4" /> MODE 1: SOLO QUIZ (LATIHAN & UJIAN MANDIRI)
                 </div>
                 <h3 className="text-lg font-bold text-white mt-1">
-                  Kerjakan Mandiri Kapan Saja
+                  Kerjakan 50 Soal Pilihan Ganda (A–E)
                 </h3>
-                <p className="text-xs text-slate-300 mt-1">
-                  Kerjakan 30 soal dengan pengatur waktu, kumpulkan XP, pecahkan rekor skor pribadi,
-                  dan pelajari pembahasan lengkap.
+                <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                  Kerjakan seluruh 50 soal ATLM secara berurutan atau lompat antar nomor soal. Pembahasan 5 aspek laboratorium terbuka otomatis setelah ujian selesai.
                 </p>
               </div>
               <button
                 onClick={() => startQuiz('solo')}
-                className="mt-5 w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg"
+                className="mt-5 w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 transition shadow-md"
               >
-                <Play className="w-4 h-4 fill-current" /> Mulai Solo Quiz (30 Soal)
+                <Play className="w-4 h-4 fill-current" /> Mulai Solo Quiz (50 Soal A–E)
               </button>
             </div>
 
             {/* Mode 2: Live Quiz with Lecturer */}
-            <div className="p-5 rounded-2xl bg-emerald-950/50 border border-emerald-500/40 flex flex-col justify-between">
+            <div className="p-5 rounded-2xl bg-[#1f3b3d] border border-emerald-400/35 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2 text-emerald-300 text-xs font-mono uppercase font-bold">
-                  <Users className="w-4 h-4" /> MODE 2: LIVE QUIZ BERSAMA DOSEN
+                  <Users className="w-4 h-4" /> MODE 2: LIVE QUIZ KELAS BERSAMA DOSEN
                 </div>
                 <h3 className="text-lg font-bold text-white mt-1">
-                  Sesi Kelas Sinkron & Podium 3D
+                  Sesi Kelas Sinkron & Podium 3D ATLM
                 </h3>
-                <p className="text-xs text-slate-300 mt-1">
-                  Masukkan kode sesi kelas dari Dosen untuk berkompetisi secara langsung menuju Podium
-                  3D Hematology World Champions.
+                <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                  Masukkan kode sesi kelas dari Dosen untuk berkompetisi secara langsung menuju Podium 3D Hematology World Champions.
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <input
@@ -323,15 +353,15 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
                     value={liveSessionCode}
                     onChange={(e) => setLiveSessionCode(e.target.value.toUpperCase())}
                     placeholder="Kode Sesi Kelas"
-                    className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-white w-full"
+                    className="px-3 py-2 rounded-lg bg-[#162936] border border-emerald-500/40 text-xs font-mono text-white w-full"
                   />
                 </div>
               </div>
               <button
                 onClick={() => startQuiz('live')}
-                className="mt-4 w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg"
+                className="mt-4 w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 transition shadow-md"
               >
-                <Play className="w-4 h-4 fill-current" /> Gabung Live Quiz Kelas
+                <Play className="w-4 h-4 fill-current" /> Gabung Live Quiz Kelas (50 Soal)
               </button>
             </div>
           </div>
@@ -341,112 +371,171 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
   }
 
   // ===========================================================================
-  // STAGE 2: FULL-SCREEN QUIZIZZ GAMEPLAY (30 QUESTIONS)
+  // STAGE 2: FULL-SCREEN QUIZIZZ GAMEPLAY (50 QUESTIONS, OPTIONS A-E)
   // ===========================================================================
   if (stage === 'playing' || stage === 'submitting') {
     const currentQ = questions[currentIndex];
     if (!currentQ) return null;
     const chosen = selectedAnswers[currentQ.questionNumber]?.selectedOption;
     const progressPct = Math.round(((currentIndex + 1) / questions.length) * 100);
+    const secBadge = SECTION_BADGE_MAP[currentQ.sectionCode || 'A'];
 
     return (
-      <div className="rounded-2xl bg-slate-950 border border-slate-800 p-6 md:p-8 text-white shadow-2xl min-h-[620px] flex flex-col justify-between">
-        {/* Top Quizizz Status Bar */}
+      <div className="rounded-2xl bg-[#243b55] border border-[#3a5778] p-5 md:p-7 text-slate-100 shadow-xl min-h-[640px] flex flex-col justify-between">
+        {/* Top Status Bar */}
         <div>
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <span className="px-3 py-1.5 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-300 font-mono font-bold text-xs">
-                SOAL {currentQ.questionNumber} DARI {questions.length}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#3a5778]">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="px-3 py-1.5 rounded-lg bg-sky-400/20 border border-sky-300/40 text-sky-200 font-mono font-bold text-xs">
+                SOAL {String(currentQ.questionNumber).padStart(2, '0')} / {questions.length}
               </span>
               <span
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold border ${
-                  currentQ.category === 'clinical_case'
-                    ? 'bg-rose-500/15 border-rose-400/40 text-rose-300'
-                    : 'bg-indigo-500/15 border-indigo-400/40 text-indigo-300'
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold border ${secBadge.style}`}
               >
-                {currentQ.category === 'clinical_case'
-                  ? 'KASUS KLINIS SANGAT SULIT'
-                  : 'TEORI HEMATOLOGI SANGAT SULIT'}
+                {secBadge.label}
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setShowHelperFormula(!showHelperFormula)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-sky-300 flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-lg bg-[#314d6d] hover:bg-[#3a5a7f] border border-[#4a6c94] text-xs font-mono text-sky-200 flex items-center gap-1.5"
               >
                 <Calculator className="w-3.5 h-3.5" />
-                {showHelperFormula ? 'Tutup Rumus' : 'Lihat Rumus Indeks'}
+                {showHelperFormula ? 'Tutup Rumus' : 'Rumus Indeks Eritrosit'}
               </button>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-300 font-mono text-xs font-bold">
-                <Flame className="w-4 h-4 text-amber-400" />
-                Terjawab: {Object.keys(selectedAnswers).length}/30
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-300/40 text-amber-200 font-mono text-xs font-bold">
+                <Flame className="w-4 h-4 text-amber-300" />
+                Terjawab: {Object.keys(selectedAnswers).length}/{questions.length}
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-xs text-slate-200">
-                <Clock className="w-4 h-4 text-sky-400" />
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#314d6d] border border-[#4a6c94] font-mono text-xs text-slate-100">
+                <Clock className="w-4 h-4 text-sky-300" />
                 {questionTimer}d
               </div>
             </div>
           </div>
 
           {/* Progress Bar */}
-          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-3">
+          <div className="w-full h-2.5 bg-[#1b2e43] rounded-full overflow-hidden mt-3">
             <div
-              className="h-full bg-gradient-to-r from-sky-500 to-emerald-400 transition-all duration-300"
+              className="h-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-300"
               style={{ width: `${progressPct}%` }}
             />
           </div>
 
-          {/* Formula Reference Banner (Optional toggle for MCV/MCH/MCHC math questions) */}
+          {/* Formula Reference Banner */}
           {showHelperFormula && (
-            <div className="mt-4 p-3.5 rounded-xl bg-slate-900 border border-sky-500/40 text-xs font-mono text-sky-200 grid grid-cols-1 md:grid-cols-3 gap-2">
-              <div>MCV (fL) = (Hematokrit (%) × 10) / RBC (juta/µL) [Normal: 80–100 fL]</div>
-              <div>MCH (pg) = (Hb (g/dL) × 10) / RBC (juta/µL) [Normal: 27–33 pg]</div>
-              <div>MCHC (g/dL) = (Hb (g/dL) × 100) / Hematokrit (%) [Normal: 32–36 g/dL]</div>
+            <div className="mt-4 p-3.5 rounded-xl bg-[#1d3147] border border-sky-400/40 text-xs font-mono text-sky-100 grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div>• MCV (fL) = (Hct (%) × 10) / RBC (juta/µL) [Normal: 80–100 fL]</div>
+              <div>• MCH (pg) = (Hb (g/dL) × 10) / RBC (juta/µL) [Normal: 27–33 pg]</div>
+              <div>• MCHC (g/dL) = (Hb (g/dL) × 100) / Hct (%) [Normal: 32–36 g/dL]</div>
+            </div>
+          )}
+
+          {/* Clinical Case Table for Bagian C (Questions 26-45) */}
+          {currentQ.caseTable && (
+            <div className="mt-5 rounded-2xl bg-[#edf2f7] border border-slate-300 text-slate-800 overflow-hidden shadow-sm">
+              <div className="px-4 py-2.5 bg-[#314d6d] text-white flex items-center justify-between text-xs font-mono">
+                <span className="font-bold flex items-center gap-1.5">
+                  <ClipboardList className="w-4 h-4 text-amber-300" />
+                  REKAM KLINIS & LABORATORIUM ATLM — SOAL KASUS #{currentQ.questionNumber}
+                </span>
+                <span className="text-sky-200">{currentQ.topic}</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-300 text-xs">
+                <div className="p-3.5 space-y-2.5">
+                  <div>
+                    <p className="font-mono font-bold text-[11px] uppercase text-sky-900">
+                      Anamnesis Pasien
+                    </p>
+                    <p className="text-slate-700 mt-0.5 leading-relaxed">
+                      {currentQ.caseTable.anamnesis}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-mono font-bold text-[11px] uppercase text-sky-900">
+                      Pemeriksaan Fisik
+                    </p>
+                    <p className="text-slate-700 mt-0.5 leading-relaxed">
+                      {currentQ.caseTable.physicalExam}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-mono font-bold text-[11px] uppercase text-sky-900">
+                      Catatan / Permintaan Dokter
+                    </p>
+                    <p className="text-slate-700 mt-0.5 leading-relaxed">
+                      {currentQ.caseTable.doctorOrder}
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3.5 space-y-2.5 bg-[#e6edf5]/70">
+                  <div>
+                    <p className="font-mono font-bold text-[11px] uppercase text-rose-900">
+                      Hasil Pemeriksaan Laboratorium
+                    </p>
+                    <p className="font-mono text-slate-800 mt-0.5 leading-relaxed font-medium">
+                      {currentQ.caseTable.labResults}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-mono font-bold text-[11px] uppercase text-emerald-900">
+                      Konteks Obat dan Edukasi
+                    </p>
+                    <p className="text-slate-700 mt-0.5 leading-relaxed">
+                      {currentQ.caseTable.medicationContext}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
           {/* Question Card */}
-          <div className="mt-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-6">
-            <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-              <span>{currentQ.topic}</span>
-              <span>Sumber PDF: {currentQ.pdfPageRef}</span>
+          <div className="mt-5 bg-[#2e4866] border border-[#45678e] rounded-2xl p-5 md:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-sky-200 mb-2">
+              <span className="font-semibold">Topik: {currentQ.topic}</span>
+              <span>Referensi Modul: {currentQ.pdfPageRef}</span>
             </div>
-            <p className="text-base md:text-lg font-medium text-white leading-relaxed">
+            <p className="text-base md:text-lg font-semibold text-white leading-relaxed">
               {currentQ.questionText}
             </p>
           </div>
 
-          {/* 4 ABCD Option Cards (Quizizz Color Palette) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            {(['A', 'B', 'C', 'D'] as const).map((optKey) => {
+          {/* 5 Multiple-Choice Option Cards: A, B, C, D, E */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mt-5">
+            {(['A', 'B', 'C', 'D', 'E'] as const).map((optKey) => {
               const isSelected = chosen === optKey;
-              const cardColors: Record<'A' | 'B' | 'C' | 'D', string> = {
+              const cardColors: Record<OptionKey, string> = {
                 A: isSelected
-                  ? 'bg-sky-600 border-white ring-2 ring-sky-300'
-                  : 'bg-sky-950/70 hover:bg-sky-900/80 border-sky-500/40',
+                  ? 'bg-sky-600 border-white ring-2 ring-sky-200'
+                  : 'bg-[#1f364d] hover:bg-[#274360] border-sky-400/35',
                 B: isSelected
-                  ? 'bg-emerald-600 border-white ring-2 ring-emerald-300'
-                  : 'bg-emerald-950/70 hover:bg-emerald-900/80 border-emerald-500/40',
+                  ? 'bg-teal-600 border-white ring-2 ring-teal-200'
+                  : 'bg-[#1f3b3f] hover:bg-[#274a4f] border-teal-400/35',
                 C: isSelected
-                  ? 'bg-amber-600 border-white ring-2 ring-amber-300'
-                  : 'bg-amber-950/70 hover:bg-amber-900/80 border-amber-500/40',
+                  ? 'bg-amber-600 border-white ring-2 ring-amber-200'
+                  : 'bg-[#3b3323] hover:bg-[#4a402c] border-amber-400/35',
                 D: isSelected
-                  ? 'bg-purple-600 border-white ring-2 ring-purple-300'
-                  : 'bg-purple-950/70 hover:bg-purple-900/80 border-purple-500/40',
+                  ? 'bg-indigo-600 border-white ring-2 ring-indigo-200'
+                  : 'bg-[#282d4d] hover:bg-[#333961] border-indigo-400/35',
+                E: isSelected
+                  ? 'bg-rose-600 border-white ring-2 ring-rose-200'
+                  : 'bg-[#3d2735] hover:bg-[#4d3143] border-rose-400/35',
               };
 
               return (
                 <button
                   key={optKey}
                   onClick={() => handleSelectOption(optKey)}
-                  className={`text-left p-5 rounded-xl border transition-all flex items-start gap-3.5 ${cardColors[optKey]}`}
+                  className={`text-left p-4 rounded-xl border transition-all flex items-start gap-3.5 ${
+                    optKey === 'E' ? 'md:col-span-2' : ''
+                  } ${cardColors[optKey]}`}
                 >
-                  <span className="w-8 h-8 rounded-lg bg-slate-950/60 border border-white/20 font-mono font-bold text-sm flex items-center justify-center shrink-0">
+                  <span className="w-8 h-8 rounded-lg bg-black/25 border border-white/25 font-mono font-bold text-sm flex items-center justify-center shrink-0 text-white">
                     {optKey}
                   </span>
-                  <span className="text-sm md:text-base font-medium leading-snug text-white">
+                  <span className="text-sm md:text-base font-medium leading-snug text-slate-100">
                     {currentQ.options[optKey]}
                   </span>
                 </button>
@@ -456,16 +545,16 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
         </div>
 
         {/* Question Navigator & Submit Footer */}
-        <div className="mt-8 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">
+        <div className="mt-7 pt-4 border-t border-[#3a5778] flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <button
               disabled={currentIndex === 0}
               onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold"
+              className="px-4 py-2.5 rounded-xl bg-[#314d6d] hover:bg-[#3c5d82] disabled:opacity-40 text-xs font-semibold text-white"
             >
               ← Soal Sebelumnya
             </button>
-            <div className="hidden lg:flex items-center gap-1 max-w-md overflow-x-auto py-1">
+            <div className="hidden xl:flex items-center gap-1 max-w-xl overflow-x-auto py-1">
               {questions.map((q, idx) => {
                 const answered = Boolean(selectedAnswers[q.questionNumber]);
                 return (
@@ -476,8 +565,8 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
                       currentIndex === idx
                         ? 'bg-sky-400 text-slate-950'
                         : answered
-                        ? 'bg-emerald-600/80 text-white'
-                        : 'bg-slate-800 text-slate-400'
+                        ? 'bg-emerald-500 text-slate-950'
+                        : 'bg-[#1b2e43] text-slate-300'
                     }`}
                   >
                     {q.questionNumber}
@@ -487,31 +576,45 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
             </div>
           </div>
 
-          <button
-            disabled={stage === 'submitting'}
-            onClick={handleNextOrSubmit}
-            className="px-6 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm shadow-lg transition"
-          >
-            {stage === 'submitting'
-              ? 'Menilai & Menyimpan Skor...'
-              : currentIndex === questions.length - 1
-              ? 'Selesaikan Kuis & Buka Pembahasan 30 Soal →'
-              : 'Soal Berikutnya →'}
-          </button>
+          <div className="flex items-center gap-2.5">
+            {currentIndex < questions.length - 1 && (
+              <button
+                disabled={stage === 'submitting'}
+                onClick={() => {
+                  setCurrentIndex(questions.length - 1);
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-[#314d6d] hover:bg-[#3c5d82] text-slate-200 font-mono text-xs"
+              >
+                Ke Soal 50
+              </button>
+            )}
+            <button
+              disabled={stage === 'submitting'}
+              onClick={handleNextOrSubmit}
+              className="px-6 py-3 rounded-xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-bold text-sm shadow-md transition"
+            >
+              {stage === 'submitting'
+                ? 'Menilai & Menyimpan Skor 50 Soal...'
+                : currentIndex === questions.length - 1
+                ? 'Selesaikan Kuis & Buka Pembahasan 50 Soal →'
+                : 'Soal Berikutnya →'}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   // ===========================================================================
-  // STAGE 3: HEMATOLOGY QUIZ REVIEW & DETAILED EXPLANATION (POST-QUIZ)
+  // STAGE 3: HEMATOLOGY QUIZ REVIEW & DETAILED EXPLANATION (POST-QUIZ 50 SOAL)
   // ===========================================================================
   const filteredReview = detailedReview.filter((item) => {
     if (reviewFilter === 'correct') return item.isCorrect;
     if (reviewFilter === 'wrong') return !item.isCorrect;
-    if (reviewFilter === 'clinical') return item.category === 'clinical_case';
-    if (reviewFilter === 'indices') return Boolean(item.calculationSteps);
-    if (reviewFilter === 'theory') return item.category === 'theory';
+    if (reviewFilter === 'secA') return item.sectionCode === 'A';
+    if (reviewFilter === 'secB') return item.sectionCode === 'B';
+    if (reviewFilter === 'secC') return item.sectionCode === 'C';
+    if (reviewFilter === 'secD') return item.sectionCode === 'D';
     return true;
   });
 
@@ -519,16 +622,16 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
     <div className="space-y-6">
       {/* Summary Score Card */}
       {summaryResult && (
-        <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 md:p-8 text-white shadow-xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+        <div className="rounded-2xl bg-[#243b55] border border-[#3a5778] p-6 md:p-8 text-white shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#3a5778]">
             <div>
-              <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                <Trophy className="w-4 h-4" /> HEMATOLOGY QUIZ REVIEW & DETAILED EXPLANATION
+              <span className="text-xs font-mono uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                <Trophy className="w-4 h-4" /> EVALUASI & PEMBAHASAN LENGKAP 50 SOAL HEMATOLOGI ATLM
               </span>
               <h2 className="text-2xl md:text-3xl font-bold mt-1">
                 Hasil Evaluasi Kompetensi: {summaryResult.fullName}
               </h2>
-              <p className="text-xs font-mono text-slate-300 mt-1">
+              <p className="text-xs font-mono text-slate-200 mt-1">
                 NPM: {summaryResult.npm} • Kelas: {summaryResult.className} • Predikat:{' '}
                 <strong className="text-amber-300">{summaryResult.gradeLabel}</strong>
               </p>
@@ -536,64 +639,64 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
             <div className="flex flex-wrap gap-2 no-print">
               <button
                 onClick={() => window.print()}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-[#314d6d] hover:bg-[#3c5d82] border border-[#4a6c94] text-xs font-semibold flex items-center gap-1.5"
               >
-                <Printer className="w-4 h-4 text-sky-400" /> Cetak Pembahasan
+                <Printer className="w-4 h-4 text-sky-300" /> Cetak Pembahasan
               </button>
               {onViewLeaderboard && (
                 <button
                   onClick={onViewLeaderboard}
-                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5"
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold flex items-center gap-1.5"
                 >
                   <Trophy className="w-4 h-4" /> Lihat Podium 3D Leaderboard
                 </button>
               )}
               <button
                 onClick={() => setStage('lobby')}
-                className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5"
               >
-                <RotateCcw className="w-4 h-4" /> Ulangi Kuis
+                <RotateCcw className="w-4 h-4" /> Ulangi Kuis 50 Soal
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
-            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
-              <p className="text-xs font-mono text-slate-400 uppercase">Skor Total</p>
-              <p className="text-2xl font-mono font-bold text-sky-400 mt-1">
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#45678e]">
+              <p className="text-xs font-mono text-slate-300 uppercase">Skor Total</p>
+              <p className="text-2xl font-mono font-bold text-sky-300 mt-1">
                 {summaryResult.totalScore}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-300 mt-0.5">
                 +{summaryResult.speedBonusTotal} Bonus Kecepatan
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
-              <p className="text-xs font-mono text-slate-400 uppercase">Jawaban Benar</p>
-              <p className="text-2xl font-mono font-bold text-emerald-400 mt-1">
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#45678e]">
+              <p className="text-xs font-mono text-slate-300 uppercase">Jawaban Benar</p>
+              <p className="text-2xl font-mono font-bold text-emerald-300 mt-1">
                 {summaryResult.correctCount} / {summaryResult.totalQuestions}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-300 mt-0.5">
                 Salah: {summaryResult.wrongCount} Soal
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
-              <p className="text-xs font-mono text-slate-400 uppercase">Persentase Akurasi</p>
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#45678e]">
+              <p className="text-xs font-mono text-slate-300 uppercase">Persentase Akurasi</p>
               <p className="text-2xl font-mono font-bold text-amber-300 mt-1">
                 {summaryResult.accuracyPercent}%
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-300 mt-0.5">
                 Streak Maks: {summaryResult.maxStreak}x
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
-              <p className="text-xs font-mono text-slate-400 uppercase">Waktu Pengerjaan</p>
+            <div className="p-4 rounded-xl bg-[#2e4866] border border-[#45678e]">
+              <p className="text-xs font-mono text-slate-300 uppercase">Waktu Pengerjaan</p>
               <p className="text-2xl font-mono font-bold text-white mt-1">
                 {Math.floor(summaryResult.durationSec / 60)}m {summaryResult.durationSec % 60}d
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">+{summaryResult.xpEarned} XP</p>
+              <p className="text-[11px] text-slate-300 mt-0.5">+{summaryResult.xpEarned} XP</p>
             </div>
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-400/40 col-span-2 md:col-span-1">
-              <p className="text-xs font-mono text-amber-300 uppercase">Penghargaan</p>
+            <div className="p-4 rounded-xl bg-amber-400/15 border border-amber-300/40 col-span-2 md:col-span-1">
+              <p className="text-xs font-mono text-amber-200 uppercase">Penghargaan</p>
               <p className="text-sm font-bold text-white mt-1 leading-snug">
                 {summaryResult.badgeCategory}
               </p>
@@ -602,11 +705,11 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
         </div>
       )}
 
-      {/* Filter Tabs for 30-Question Detailed Review */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 no-print">
+      {/* Filter Tabs for 50-Question Detailed Review */}
+      <div className="bg-[#edf2f7] rounded-2xl border border-slate-300 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 no-print">
         <div className="flex flex-wrap gap-2">
           {[
-            { id: 'all', label: `Semua Soal (${detailedReview.length})` },
+            { id: 'all', label: `Semua 50 Soal (${detailedReview.length})` },
             {
               id: 'correct',
               label: `Jawaban Benar (${detailedReview.filter((x) => x.isCorrect).length})`,
@@ -615,17 +718,18 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
               id: 'wrong',
               label: `Jawaban Salah (${detailedReview.filter((x) => !x.isCorrect).length})`,
             },
-            { id: 'clinical', label: 'Soal Kasus Klinis (20)' },
-            { id: 'indices', label: 'Soal Perhitungan MCV/MCH/MCHC (11)' },
-            { id: 'theory', label: 'Soal Teori Sulit (10)' },
+            { id: 'secA', label: 'Bagian A: Teori Dasar (10)' },
+            { id: 'secB', label: 'Bagian B: Gabungan CBC & QC (15)' },
+            { id: 'secC', label: 'Bagian C: Kasus Sangat Sulit (20)' },
+            { id: 'secD', label: 'Bagian D: Hitungan MCV/MCH/MCHC (5)' },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setReviewFilter(tab.id as typeof reviewFilter)}
               className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
                 reviewFilter === tab.id
-                  ? 'bg-slate-900 text-white shadow'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  ? 'bg-[#243b55] text-white shadow'
+                  : 'bg-[#dde5ef] hover:bg-slate-300 text-slate-700'
               }`}
             >
               {tab.label}
@@ -639,134 +743,160 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
         {filteredReview.map((item) => (
           <div
             key={item.questionNumber}
-            className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+            className="bg-[#edf2f7] rounded-2xl border border-slate-300 shadow-sm overflow-hidden"
           >
             {/* Question Header */}
             <div
               className={`px-6 py-4 border-b flex flex-wrap items-center justify-between gap-3 ${
                 item.isCorrect
-                  ? 'bg-emerald-50/70 border-emerald-200'
-                  : 'bg-rose-50/70 border-rose-200'
+                  ? 'bg-emerald-100/80 border-emerald-300'
+                  : 'bg-rose-100/80 border-rose-300'
               }`}
             >
               <div className="flex items-center gap-2.5">
                 {item.isCorrect ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
                 ) : (
-                  <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                  <XCircle className="w-5 h-5 text-rose-700 shrink-0" />
                 )}
-                <span className="font-mono font-bold text-sm text-slate-900">
-                  SOAL #{item.questionNumber} — {item.topic}
+                <span className="font-mono font-bold text-sm text-slate-800">
+                  SOAL #{String(item.questionNumber).padStart(2, '0')} [BAGIAN {item.sectionCode}] — {item.topic}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-xs font-mono">
                 <span
                   className={`px-2.5 py-1 rounded-md font-bold ${
                     item.isCorrect
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-rose-600 text-white'
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-rose-700 text-white'
                   }`}
                 >
                   {item.isCorrect ? 'BENAR (+Poin)' : 'SALAH'}
                 </span>
-                <span className="text-slate-600 bg-white px-2.5 py-1 rounded-md border border-slate-200">
-                  Referensi PDF: {item.pdfPageRef}
+                <span className="text-slate-700 bg-[#e2e8f0] px-2.5 py-1 rounded-md border border-slate-300">
+                  {item.pdfPageRef}
                 </span>
               </div>
             </div>
 
             <div className="p-6 space-y-5">
+              {/* Clinical Case Table if Bagian C */}
+              {item.caseTable && (
+                <div className="rounded-xl bg-[#e2e8f0] border border-slate-300 p-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-800">
+                  <div>
+                    <p className="font-mono font-bold text-sky-900 uppercase">Anamnesis & Fisik:</p>
+                    <p className="mt-0.5">{item.caseTable.anamnesis}</p>
+                    <p className="mt-1 text-slate-700">{item.caseTable.physicalExam}</p>
+                    <p className="mt-1 font-medium text-slate-900">
+                      Permintaan Dokter: {item.caseTable.doctorOrder}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-mono font-bold text-rose-900 uppercase">Hasil Pemeriksaan Lab:</p>
+                    <p className="mt-0.5 font-mono">{item.caseTable.labResults}</p>
+                    <p className="mt-1.5 text-emerald-950">
+                      <strong>Konteks Obat/Edukasi:</strong> {item.caseTable.medicationContext}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Question Text */}
-              <p className="text-base font-medium text-slate-900 leading-relaxed">
+              <p className="text-base font-semibold text-slate-900 leading-relaxed">
                 {item.questionText}
               </p>
 
-              {/* Student Answer vs Correct Answer Comparison */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div
-                  className={`p-3.5 rounded-xl border ${
-                    item.isCorrect
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                      : 'bg-rose-50 border-rose-200 text-rose-950'
-                  }`}
-                >
-                  <p className="text-xs font-mono uppercase opacity-75">Jawaban Mahasiswa</p>
-                  <p className="text-sm font-bold mt-0.5">
-                    Opsi {item.studentAnswer}: {item.options[item.studentAnswer]}
-                  </p>
-                </div>
-                <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-950">
-                  <p className="text-xs font-mono uppercase opacity-75">Kunci Jawaban Benar</p>
-                  <p className="text-sm font-bold mt-0.5">
-                    Opsi {item.correctOption}: {item.options[item.correctOption]}
-                  </p>
-                </div>
+              {/* All 5 Options A-E Comparison */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+                {(['A', 'B', 'C', 'D', 'E'] as const).map((optKey) => {
+                  const isCorrectOpt = optKey === item.correctOption;
+                  const isStudentOpt = optKey === item.studentAnswer;
+                  return (
+                    <div
+                      key={optKey}
+                      className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                        optKey === 'E' ? 'md:col-span-2' : ''
+                      } ${
+                        isCorrectOpt
+                          ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 font-semibold'
+                          : isStudentOpt && !item.isCorrect
+                          ? 'bg-rose-100/90 border-rose-400 text-rose-950 font-semibold'
+                          : 'bg-[#e6edf5] border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <span className="font-mono font-bold px-2 py-0.5 rounded bg-white/70 border border-slate-300">
+                        {optKey}
+                      </span>
+                      <div className="flex-1">
+                        <p>{item.options[optKey]}</p>
+                        {isCorrectOpt && (
+                          <span className="inline-block mt-1 text-[11px] font-mono text-emerald-800 font-bold">
+                            ✓ KUNCI JAWABAN BENAR
+                          </span>
+                        )}
+                        {isStudentOpt && !isCorrectOpt && (
+                          <span className="inline-block mt-1 text-[11px] font-mono text-rose-800 font-bold">
+                            ✗ JAWABAN MAHASISWA
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* Step-by-step Calculation (if Erythrocyte Index Question) */}
+              {/* Step-by-step Calculation (if Calculation Question) */}
               {item.calculationSteps && (
-                <div className="p-4 rounded-xl bg-slate-900 text-sky-300 font-mono text-xs leading-relaxed border border-slate-800">
+                <div className="p-4 rounded-xl bg-[#243b55] text-sky-200 font-mono text-xs leading-relaxed border border-[#3a5778]">
                   <p className="text-white font-bold uppercase mb-1 flex items-center gap-1.5">
-                    <Calculator className="w-4 h-4 text-sky-400" />
-                    Langkah Perhitungan Indeks Eritrosit (Substitusi Rumus):
+                    <Calculator className="w-4 h-4 text-sky-300" />
+                    Langkah Perhitungan & Validasi Indeks Eritrosit:
                   </p>
                   <p>{item.calculationSteps}</p>
                 </div>
               )}
 
-              {/* Scientific Explanation */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700 leading-relaxed">
-                <p className="font-bold text-slate-900 text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <BookOpen className="w-4 h-4 text-sky-600" />
-                  Pembahasan Ilmiah Hematologi
-                </p>
-                <p>{item.scientificExplanation}</p>
-              </div>
-
-              {/* Rationale for Every Option A, B, C, D */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                  Analisis Rasional Setiap Opsi Pilihan (A, B, C, D)
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
-                  {(['A', 'B', 'C', 'D'] as const).map((optKey) => (
-                    <div
-                      key={optKey}
-                      className={`p-3 rounded-xl border ${
-                        optKey === item.correctOption
-                          ? 'bg-emerald-50/60 border-emerald-300 text-emerald-950'
-                          : 'bg-white border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      <p className="font-mono font-bold">
-                        Opsi {optKey}: {item.options[optKey]}
-                      </p>
-                      <p className="mt-1">{item.optionRationales[optKey]}</p>
-                    </div>
-                  ))}
+              {/* 5-Part Detailed ATLM Explanations */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <div className="p-4 rounded-xl bg-[#e2e8f0] border border-slate-300 text-xs text-slate-800 leading-relaxed">
+                  <p className="font-bold text-slate-900 uppercase mb-1 flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-sky-700" />
+                    1. Dasar Penalaran Laboratorium
+                  </p>
+                  <p>{item.scientificExplanation}</p>
                 </div>
-              </div>
 
-              {/* Clinical Interpretation, Patient Education & Management Plan */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-                <div className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-100 text-xs text-slate-700">
-                  <p className="font-bold text-sky-900 uppercase mb-1 flex items-center gap-1">
-                    <Stethoscope className="w-3.5 h-3.5" /> Interpretasi Klinis Dokter
+                <div className="p-4 rounded-xl bg-[#e2e8f0] border border-slate-300 text-xs text-slate-800 leading-relaxed">
+                  <p className="font-bold text-slate-900 uppercase mb-1 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-teal-700" />
+                    2. Prosedur dan Keputusan ATLM
+                  </p>
+                  <p>{item.atlmProcedureAndDecision}</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#e2e8f0] border border-slate-300 text-xs text-slate-800 leading-relaxed">
+                  <p className="font-bold text-slate-900 uppercase mb-1 flex items-center gap-1.5">
+                    <Stethoscope className="w-4 h-4 text-indigo-700" />
+                    3. Hubungan dengan Terapi / Obat Dokter
                   </p>
                   <p>{item.doctorClinicalExplanation}</p>
                 </div>
-                <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-100 text-xs text-slate-700">
-                  <p className="font-bold text-amber-900 uppercase mb-1 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" /> Edukasi Pasien
+
+                <div className="p-4 rounded-xl bg-[#e2e8f0] border border-slate-300 text-xs text-slate-800 leading-relaxed">
+                  <p className="font-bold text-slate-900 uppercase mb-1 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-700" />
+                    4. Edukasi dan Komunikasi Klinis
                   </p>
                   <p>{item.patientEducation}</p>
                 </div>
-                <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-100 text-xs text-slate-700">
-                  <p className="font-bold text-emerald-900 uppercase mb-1 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5" /> Rencana Tindak Lanjut
-                  </p>
-                  <p>{item.managementPlan}</p>
-                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-amber-100/60 border border-amber-300 text-xs text-slate-800 leading-relaxed">
+                <p className="font-bold text-amber-950 uppercase mb-1 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-800" />
+                  5. Mengapa Pilihan Lain Keliru (Analisis Opsi A–E)
+                </p>
+                <p>{item.whyOthersWrong}</p>
               </div>
             </div>
           </div>

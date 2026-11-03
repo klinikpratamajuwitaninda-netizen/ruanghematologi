@@ -9,8 +9,8 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #f8fafc;
-    color: #0f172a;
+    background-color: #dde5ef;
+    color: #1e293b;
     overflow-x: hidden;
   }
 
@@ -24,12 +24,41 @@
   }
 }
 
+/* Balanced Mid-Tone Clinical Theme overrides so nothing is pitch-black or blinding white */
+.bg-white {
+  background-color: #edf2f7 !important;
+}
+
+.bg-slate-50 {
+  background-color: #e3eaf2 !important;
+}
+
+.bg-slate-100 {
+  background-color: #d8e2ec !important;
+}
+
+.bg-slate-900 {
+  background-color: #243b55 !important;
+}
+
+.bg-slate-950 {
+  background-color: #1e3248 !important;
+}
+
+.border-slate-200 {
+  border-color: #c8d4e3 !important;
+}
+
+.border-slate-800 {
+  border-color: #365273 !important;
+}
+
 /* Custom print rules for Lecturer Score Report & Post-Quiz Review */
 @media print {
   .no-print {
     display: none !important;
   }
-  body {
+  body, .bg-white, .bg-slate-50 {
     background: #ffffff !important;
     color: #000000 !important;
   }
