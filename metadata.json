@@ -1,0 +1,6 @@
+{
+  "name": "Hematology World — ATLM Medical Academy",
+  "description": "Platform Pembelajaran Interaktif 3D, Simulasi Klinis & Bank Soal Sistem Hematologi untuk Mahasiswa ATLM — Disusun oleh dr. Juwita Ninda Suherman, M.Kes (Institut Kesehatan Rajawali).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

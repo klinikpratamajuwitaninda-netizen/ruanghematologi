@@ -1,0 +1,1342 @@
+# MASTER PROMPT FINAL — GOOGLE AI STUDIO BUILD MODE
+# HEMATOLOGY WORLD
+## 3D ROBLOX-STYLE ATLM MEDICAL LEARNING, CLINICAL SIMULATION & QUIZ PLATFORM
+
+Anda bertindak sebagai tim pengembang profesional yang terdiri atas:
+
+- Senior Full-Stack Developer.
+- 3D Game Developer.
+- Medical Laboratory Scientist.
+- Hematology Specialist.
+- Clinical Case Designer.
+- Medical Education Specialist.
+- UI/UX Designer.
+- Database Engineer.
+- Gamification Developer.
+
+Tugas Anda adalah membangun website pembelajaran interaktif berbasis game 3D untuk mahasiswa Ahli Teknologi Laboratorium Medik (ATLM).
+
+Nama aplikasi:
+
+**HEMATOLOGY WORLD — ATLM MEDICAL ACADEMY**
+
+Tagline:
+
+"Explore Blood. Analyze Results. Become a Hematology Expert."
+
+PLATFORM PENGEMBANGAN: GOOGLE AI STUDIO — BUILD MODE.
+
+Buat aplikasi yang benar-benar berfungsi, bukan sekadar mockup, landing page, atau desain statis.
+
+Semua fitur harus terintegrasi dalam satu aplikasi.
+
+---
+
+# BAGIAN 1. SUMBER MATERI DAN GAMBAR PDF
+
+Gunakan file PDF ANFIS DARAH yang telah saya unggah sebagai sumber utama.
+
+PDF tersebut terdiri dari 47 halaman.
+
+Seluruh materi, diagram, ilustrasi, gambar mikroskopis, rumus, dan konsep pembelajaran harus bersumber dari PDF tersebut.
+
+Jangan mengarang materi dan jangan mengganti gambar asli dengan gambar AI apabila gambar aslinya tersedia.
+
+Prioritas gambar:
+
+| Halaman | Materi dan gambar |
+|---|---|
+| 2–3 | Sejarah hematologi |
+| 5–9 | Sistem hematologi, komposisi darah, plasma |
+| 10–14 | Sumsum tulang dan hematopoiesis |
+| 15–20 | Eritrosit, hemoglobin, eritropoiesis |
+| 21–25 | Leukosit dan jenis-jenisnya |
+| 26–28 | Trombosit dan morfologi darah |
+| 29–32 | Hemostasis dan kaskade koagulasi |
+| 33–36 | Sirkulasi darah, ABO, Rhesus |
+| 37–40 | Pemeriksaan CBC, MCV, MCH, MCHC, RDW |
+| 41–43 | Anemia dan kasus klinis |
+
+Ketentuan:
+1. Ekstrak gambar asli dari PDF.
+2. Simpan gambar dalam folder assets.
+3. Masukkan gambar pada modul yang relevan.
+4. Jangan memotong keterangan penting.
+5. Gunakan resolusi terbaik yang tersedia.
+6. Tambahkan keterangan dan nomor halaman sumber.
+7. Sediakan fitur memperbesar gambar.
+8. Jika gambar berada dalam satu halaman slide, lakukan cropping secara presisi.
+9. Jangan mengaku telah memasukkan gambar apabila ekstraksi gagal.
+
+---
+
+# BAGIAN 2. KONSEP VISUAL DAN DESAIN GAME
+
+Buat website seperti game Roblox 3D.
+
+Nama dunia permainan:
+
+**HEMATOLOGY WORLD**
+
+Lingkungan:
+- Rumah sakit internasional.
+- Laboratorium hematologi futuristik.
+- Ruang pemeriksaan darah.
+- Ruang dokter.
+- Ruang rawat inap.
+- Ruang IGD.
+- Ruang konferensi medis.
+- Lobby rumah sakit.
+- Koridor rumah sakit.
+- Taman rumah sakit.
+
+Desain:
+- Modern.
+- Mewah.
+- Cerah.
+- Elegan.
+- Futuristik.
+- Interaktif.
+- Profesional.
+
+Gunakan dominasi:
+- Putih.
+- Biru medis.
+- Cyan.
+- Merah darah.
+- Ungu sebagai aksen.
+
+Jangan menggunakan desain yang terlalu gelap.
+
+Buat animasi sel darah merah dan putih yang bergerak sebagai elemen dekoratif.
+
+---
+
+# BAGIAN 3. AVATAR YANG DAPAT DIMAINKAN
+
+PENTING: HANYA AVATAR ATLM YANG DAPAT DIMAINKAN.
+
+Buat dua avatar utama:
+
+1. ATLM laki-laki, sangat tampan dan profesional.
+2. ATLM perempuan, sangat cantik dan profesional.
+
+Gaya Roblox 3D dengan kualitas visual tinggi.
+
+Avatar dapat menggunakan:
+- Jas laboratorium putih.
+- Seragam ATLM.
+- Scrub medis.
+- ID card.
+- Sepatu laboratorium.
+- Aksesori laboratorium.
+
+Fitur personalisasi:
+- Pilihan karakter laki-laki/perempuan.
+- Model rambut.
+- Warna kulit.
+- Seragam.
+- Sepatu.
+- Aksesori.
+
+Jangan membuat avatar dokter, perawat, atau pasien yang bisa dimainkan.
+
+Karakter lain hanya menjadi NPC.
+
+## Gerakan avatar
+
+Desktop:
+- W, A, S, D untuk bergerak.
+- Shift untuk sprint.
+- Space untuk melompat.
+- E untuk interaksi.
+- Mouse untuk mengatur kamera.
+
+Mobile:
+- Joystick virtual.
+- Tombol sprint.
+- Tombol lompat.
+- Tombol interaksi.
+- Kontrol kamera.
+
+Gerakan harus cepat, responsif, dan halus.
+
+Animasi:
+- Idle.
+- Walking.
+- Running.
+- Sprinting.
+- Jumping.
+- Greeting.
+- Talking.
+- Waving.
+- Celebrating.
+- Victory.
+
+Target 60 FPS pada perangkat yang mendukung.
+
+---
+
+# BAGIAN 4. RUMAH SAKIT DAN LABORATORIUM FUTURISTIK
+
+Buat rumah sakit 3D yang sangat mewah dan lengkap.
+
+## A. Lobby
+
+Tampilkan:
+- Resepsionis.
+- Sofa.
+- Lift.
+- Papan informasi digital.
+- Dokter.
+- Perawat.
+- Pasien.
+- Pengunjung.
+- Petugas administrasi.
+- Petugas keamanan.
+
+## B. Laboratorium hematologi
+
+Buat laboratorium berteknologi tinggi dengan:
+- Hematology analyzer.
+- Mikroskop digital.
+- Centrifuge.
+- Blood cell counter.
+- Blood smear station.
+- Blood collection tubes.
+- Rak tabung darah.
+- Reagen.
+- Lemari penyimpanan sampel.
+- Blood refrigerator.
+- Komputer laboratorium.
+- Digital Laboratory Information System.
+- Meja preparasi.
+- Ruang pengambilan darah.
+- Display hasil CBC.
+- Ruang pemeriksaan morfologi darah.
+
+Semua alat harus mempunyai bentuk 3D yang menarik.
+
+Objek dapat diklik untuk menampilkan fungsi dan penjelasannya.
+
+## C. Ruang dokter dan pasien
+
+Tampilkan:
+- Dokter umum.
+- Dokter spesialis penyakit dalam.
+- Dokter spesialis hematologi-onkologi.
+- Perawat.
+- Pasien.
+- Petugas laboratorium.
+
+## D. Ruang IGD dan rawat inap
+
+Tampilkan pasien dengan skenario simulasi:
+- Anemia.
+- Infeksi.
+- Perdarahan.
+- Trombositopenia.
+- Gangguan hematologi.
+
+Semua pasien merupakan karakter simulasi pendidikan.
+
+---
+
+# BAGIAN 5. NPC DAPAT DIAJAK BERBICARA
+
+Dokter, dokter spesialis, pasien, perawat, dan petugas lainnya harus menjadi NPC interaktif.
+
+Mahasiswa dapat mendekati NPC lalu menekan tombol E.
+
+Contoh:
+
+Dokter:
+"Hello! Welcome to our hospital."
+
+Avatar ATLM:
+"Hi, Doctor!"
+
+Dokter:
+"Are you studying hematology today?"
+
+Avatar:
+"Yes, Doctor!"
+
+Dokter:
+"Excellent! Let's explore the hematology laboratory."
+
+Pasien:
+"Excuse me, where can I have my blood checked?"
+
+Avatar:
+"Please follow me to the laboratory."
+
+Buat minimal 30 variasi percakapan.
+
+Ketentuan:
+- Bubble chat.
+- Animasi berbicara.
+- Respons NPC.
+- Dialog bahasa Indonesia dan Inggris.
+- NPC dapat menyapa pemain.
+- NPC dapat bergerak secara alami.
+- Dialog tidak berulang secara terus-menerus.
+
+Tambahkan suara dialog apabila didukung, dengan opsi mute.
+
+---
+
+# BAGIAN 6. SISTEM LOGIN DAN AKSES LIFETIME
+
+Ini merupakan fitur yang sangat penting.
+
+Buat dua menu:
+
+1. MASUK DOSEN.
+2. MASUK MAHASISWA.
+
+## A. Login dosen
+
+Kode awal dosen:
+
+**121201**
+
+Gunakan kode tersebut sebagai kode bootstrap awal untuk mengakses pengaturan dosen.
+
+Pada login pertama, dosen harus membuat kredensial pribadi yang aman.
+
+Setelah itu, dosen dapat masuk menggunakan akun dosen.
+
+Jangan menyimpan kode rahasia dalam source code frontend.
+
+## B. Kode akses mahasiswa
+
+Kode awal mahasiswa:
+
+**121201**
+
+Dosen dapat membuat, mengganti, dan menonaktifkan kode akses mahasiswa melalui dashboard.
+
+Buat menu:
+
+**STUDENT ACCESS CODE MANAGEMENT**
+
+Fitur:
+- Kode akses aktif.
+- Buat kode baru.
+- Ubah kode.
+- Nonaktifkan kode.
+- Riwayat kode.
+- Tanggal pembuatan.
+- Jumlah mahasiswa yang telah mengaktifkan.
+- Status kode.
+- Kode untuk mahasiswa baru.
+
+### ATURAN LIFETIME — WAJIB DIPATUHI
+
+Saya menginginkan sistem akses lifetime.
+
+Aturan yang harus diterapkan:
+
+1. Setiap mahasiswa hanya perlu mengaktifkan akses satu kali menggunakan kode dari dosen.
+2. Aktivasi diikat dengan NPM mahasiswa.
+3. Setelah berhasil diaktifkan, mahasiswa memperoleh akses permanen/lifetime.
+4. Mahasiswa tidak perlu registrasi akun.
+5. Mahasiswa tidak perlu email.
+6. Mahasiswa tidak perlu password.
+7. Mahasiswa tidak perlu memasukkan kode akses setiap kali membuka website setelah aktivasi.
+8. Sistem menyimpan hak akses permanen berdasarkan NPM yang telah diaktifkan.
+9. Setiap mahasiswa hanya mempunyai satu identitas peserta berdasarkan NPM.
+10. Mahasiswa yang sama dapat mengerjakan kuis berkali-kali dan seluruh hasilnya tersimpan sebagai riwayat terpisah.
+
+PENTING: Kode akses merupakan kode kelas yang dapat digunakan oleh beberapa mahasiswa yang berhak. Aktivasi dilakukan satu kali per NPM, bukan menghabiskan kode untuk seluruh kelas setelah mahasiswa pertama menggunakannya.
+
+### Ketika dosen mengganti kode
+
+Contoh:
+
+Kode lama: 121201.
+
+Mahasiswa A, B, dan C telah mengaktifkan akses menggunakan kode tersebut.
+
+Kemudian dosen membuat kode baru:
+
+Kode baru: 567890.
+
+Ketentuannya:
+
+- Mahasiswa A, B, dan C tetap memiliki akses lifetime.
+- Kode lama dapat dinonaktifkan untuk aktivasi baru.
+- Mahasiswa baru menggunakan kode 567890.
+- Penggantian kode tidak menghapus akses mahasiswa lama.
+- Penggantian kode tidak menghapus nilai.
+- Penggantian kode tidak menghapus riwayat kuis.
+- Penggantian kode tidak mengubah identitas NPM mahasiswa lama.
+
+Sediakan sistem versioning kode akses.
+
+Jangan menghubungkan status aktif kode lama dengan status lifetime mahasiswa yang sudah berhasil mengaktifkan akses.
+
+### Alur mahasiswa
+
+Saat pertama membuka website:
+
+1. Mahasiswa memilih MASUK MAHASISWA.
+2. Memasukkan kode akses dosen.
+3. Jika valid, mahasiswa dapat memasuki dunia game.
+4. Tidak ada formulir registrasi akun.
+5. Ketika akan mengerjakan kuis, mahasiswa memasukkan nama lengkap dan NPM.
+6. Sistem menghubungkan NPM dengan sesi akses yang telah divalidasi.
+7. Sistem membuat hak akses lifetime untuk NPM tersebut.
+
+Pada kunjungan berikutnya:
+- Mahasiswa tidak perlu memasukkan kode lagi pada perangkat yang telah diaktifkan.
+- Mahasiswa cukup mengakses kembali menggunakan sesi permanen.
+- Saat mengerjakan kuis, mahasiswa mengisi nama dan NPM sesuai identitasnya.
+
+Jika mahasiswa menggunakan perangkat baru, sediakan mekanisme pemulihan akses melalui dosen tanpa membuat akun baru.
+
+Jangan membuat menu registrasi mahasiswa.
+
+---
+
+# BAGIAN 7. DASHBOARD MAHASISWA
+
+Buat dashboard modern seperti game edukasi premium.
+
+Menu:
+
+1. Home.
+2. Explore Hospital.
+3. Virtual Hematology Lab.
+4. Learning Materials.
+5. Blood Cell Explorer.
+6. Clinical Case Simulation.
+7. Hematology Quiz.
+8. Digital Calculator.
+9. Medical Glossary.
+10. Leaderboard.
+11. My Score.
+12. Achievements.
+13. Avatar Settings.
+14. Audio Settings.
+
+Tampilkan:
+- Nama mahasiswa.
+- NPM.
+- Avatar.
+- Level.
+- XP.
+- Nilai tertinggi.
+- Nilai rata-rata.
+- Jumlah kuis.
+- Progress materi.
+- Jumlah kasus selesai.
+- Ranking.
+
+---
+
+# BAGIAN 8. MATERI PEMBELAJARAN
+
+Susun materi berdasarkan PDF ANFIS DARAH.
+
+Modul:
+
+1. Sejarah hematologi.
+2. Pengantar hematologi.
+3. Fungsi darah.
+4. Komposisi darah.
+5. Plasma.
+6. Eritrosit.
+7. Hemoglobin.
+8. Hematopoiesis.
+9. Eritropoiesis.
+10. Leukosit.
+11. Granulosit.
+12. Agranulosit.
+13. Neutrofil.
+14. Eosinofil.
+15. Basofil.
+16. Limfosit.
+17. Monosit.
+18. Trombosit.
+19. Trombopoiesis.
+20. Hemostasis.
+21. Koagulasi.
+22. Sirkulasi darah.
+23. Golongan darah ABO.
+24. Rhesus.
+25. CBC.
+26. Indeks eritrosit.
+27. MCV.
+28. MCH.
+29. MCHC.
+30. RDW.
+31. Anemia.
+32. Leukemia.
+33. Trombositopenia.
+34. Gangguan koagulasi.
+35. Penerapan klinis.
+
+Setiap modul mempunyai:
+- Materi lengkap.
+- Gambar PDF.
+- Diagram.
+- Animasi.
+- Penjelasan.
+- Ringkasan.
+- Latihan soal.
+
+---
+
+# BAGIAN 9. KALKULATOR DIGITAL HEMATOLOGI
+
+Buat menu khusus:
+
+**DIGITAL HEMATOLOGY CALCULATOR**
+
+Kalkulator harus dapat digunakan mahasiswa untuk menghitung indeks eritrosit secara otomatis.
+
+Sediakan tiga kalkulator utama.
+
+## A. Kalkulator MCV
+
+Mean Corpuscular Volume.
+
+Rumus:
+
+MCV = (Hematokrit × 10) / RBC
+
+Satuan:
+fL.
+
+Rentang pada materi:
+- Kurang dari 80 fL: mikrositik.
+- 80–100 fL: normositik.
+- Lebih dari 100 fL: makrositik.
+
+## B. Kalkulator MCH
+
+Mean Corpuscular Hemoglobin.
+
+Rumus:
+
+MCH = (Hb × 10) / RBC
+
+Satuan:
+pg.
+
+## C. Kalkulator MCHC
+
+Mean Corpuscular Hemoglobin Concentration.
+
+Rumus:
+
+MCHC = (Hb × 100) / Hematokrit
+
+Satuan:
+g/dL.
+
+### Input kalkulator
+
+Sediakan:
+- Hemoglobin (g/dL).
+- Hematokrit (%).
+- RBC (juta/µL).
+
+Tombol:
+- HITUNG.
+- RESET.
+- SIMPAN HASIL.
+- LIHAT PEMBAHASAN.
+
+Setelah tombol HITUNG ditekan, tampilkan:
+
+1. Nilai MCV.
+2. Nilai MCH.
+3. Nilai MCHC.
+4. Satuan.
+5. Interpretasi.
+6. Langkah perhitungan.
+7. Rumus yang digunakan.
+8. Klasifikasi indeks eritrosit.
+
+Contoh:
+
+Diketahui:
+Hb = 9,5 g/dL.
+Hct = 28,8%.
+RBC = 4,0 juta/µL.
+
+MCV = (28,8 × 10) / 4,0
+MCV = 72 fL.
+
+MCH = (9,5 × 10) / 4,0
+MCH = 23,75 pg.
+
+MCHC = (9,5 × 100) / 28,8
+MCHC = 32,99 g/dL.
+
+Tampilkan interpretasi masing-masing secara terpisah.
+
+Validasi:
+- Tidak boleh menerima nilai kosong.
+- Tidak boleh menerima angka negatif.
+- Tidak boleh membagi dengan nol.
+- Satuan harus jelas.
+- Pembulatan dua desimal.
+- Tampilkan peringatan jika data tidak konsisten.
+- Jangan memberikan diagnosis hanya berdasarkan indeks eritrosit.
+
+Gunakan rentang umum yang tercantum pada PDF halaman 38–40 dan beri catatan bahwa rentang rujukan dapat berbeda antar-laboratorium.
+
+---
+
+# BAGIAN 10. GLOSARIUM ISTILAH MEDIS DAN HEMATOLOGI
+
+Buat menu khusus di dashboard mahasiswa:
+
+**MEDICAL & HEMATOLOGY GLOSSARY**
+
+Fitur ini wajib tersedia dan dapat digunakan untuk mencari istilah medis.
+
+Buat glosarium yang berisi istilah, singkatan, dan pengertiannya.
+
+Setiap istilah memiliki:
+1. Nama istilah.
+2. Singkatan.
+3. Istilah bahasa Inggris.
+4. Pengertian bahasa Indonesia.
+5. Fungsi atau peran.
+6. Contoh penggunaan dalam konteks medis.
+7. Hubungan dengan materi hematologi.
+8. Referensi halaman PDF.
+
+### Kelompok glosarium
+
+A. Komponen darah:
+- Darah.
+- Plasma.
+- Eritrosit.
+- Leukosit.
+- Trombosit.
+- Hemoglobin.
+- Albumin.
+- Globulin.
+- Fibrinogen.
+
+B. Pembentukan darah:
+- Hematopoiesis.
+- Eritropoiesis.
+- Leukopoiesis.
+- Trombopoiesis.
+- Sel punca hematopoietik.
+- Sumsum tulang merah.
+- Retikulosit.
+- Megakariosit.
+
+C. Indeks eritrosit:
+- MCV.
+- MCH.
+- MCHC.
+- RDW.
+- Mikrositik.
+- Normositik.
+- Makrositik.
+- Hipokromik.
+- Normokromik.
+
+D. Leukosit dan imunologi:
+- Neutrofil.
+- Eosinofil.
+- Basofil.
+- Limfosit.
+- Monosit.
+- Makrofag.
+- Limfosit B.
+- Limfosit T.
+- CD4+.
+- CD8+.
+- Natural Killer Cell.
+- Fagositosis.
+- Inflamasi.
+- Antigen.
+- Antibodi.
+
+E. Hemostasis:
+- Hemostasis.
+- Koagulasi.
+- Vasokonstriksi.
+- Protrombin.
+- Trombin.
+- Fibrin.
+- Fibrinogen.
+- Fibrinolisis.
+- Faktor pembekuan.
+
+F. Pemeriksaan laboratorium:
+- CBC.
+- Complete Blood Count.
+- Hematokrit.
+- RBC.
+- WBC.
+- PLT.
+- Ferritin.
+- Apusan darah tepi.
+- Hitung jenis leukosit.
+
+G. Golongan darah:
+- ABO.
+- Antigen A.
+- Antigen B.
+- Antigen D.
+- Rh positif.
+- Rh negatif.
+- Aglutinasi.
+
+H. Gangguan hematologi:
+- Anemia.
+- Leukemia.
+- Trombositopenia.
+- Gangguan koagulasi.
+
+### Fungsi glosarium
+
+- Pencarian berdasarkan kata.
+- Pencarian berdasarkan singkatan.
+- Filter kategori.
+- Urutkan alfabetis.
+- Favoritkan istilah.
+- Lihat istilah terkait.
+- Tampilkan definisi dalam pop-up.
+- Tampilkan ilustrasi jika tersedia dalam PDF.
+
+Jangan membuat definisi yang tidak didukung PDF seolah-olah berasal dari sumber.
+
+Jika terdapat istilah tambahan dari pengetahuan medis umum, beri label MATERI TAMBAHAN dan cantumkan referensi yang sesuai.
+
+---
+
+# BAGIAN 11. SIMULASI KLINIS DOKTER DAN PASIEN
+
+Buat fitur:
+
+**CLINICAL HEMATOLOGY SIMULATION**
+
+Mahasiswa bermain sebagai ATLM di rumah sakit.
+
+Setiap kasus mempunyai alur:
+
+1. Pasien datang.
+2. Dokter melakukan anamnesis.
+3. Dokter melakukan pemeriksaan fisik.
+4. Dokter meminta pemeriksaan laboratorium.
+5. Sampel masuk ke laboratorium.
+6. ATLM memeriksa sampel.
+7. Mahasiswa memperoleh hasil CBC.
+8. Mahasiswa menganalisis hasil.
+9. Mahasiswa menghitung indeks eritrosit.
+10. ATLM menyampaikan hasil kepada dokter sesuai prosedur.
+11. Dokter menginterpretasikan temuan klinis.
+12. Dokter memberikan edukasi kepada pasien.
+13. Dokter menjelaskan penatalaksanaan dan terapi.
+14. Mahasiswa menyelesaikan skenario.
+
+Setiap kasus harus memuat:
+- Identitas pasien fiktif.
+- Anamnesis.
+- Pemeriksaan fisik.
+- Hasil CBC.
+- Hasil pemeriksaan pendukung jika diperlukan.
+- Interpretasi laboratorium.
+- Edukasi dokter.
+- Rencana pemeriksaan lanjutan.
+- Rencana terapi dokter.
+- Pertanyaan evaluasi untuk mahasiswa.
+
+Mahasiswa ATLM tidak boleh diposisikan sebagai pemberi diagnosis atau pemberi resep. Dokter bertanggung jawab atas diagnosis klinis dan terapi.
+
+Jika materi terapi tidak tersedia di PDF, beri label sebagai informasi tambahan dan wajib gunakan referensi medis yang dapat diverifikasi. Jangan membuat dosis obat yang tidak didukung sumber.
+
+---
+
+# BAGIAN 12. KUIS SUPER SULIT — 30 SOAL ABCD
+
+Buat bank soal berjumlah TEPAT 30 SOAL.
+
+Semua soal pilihan ganda A, B, C, D dengan satu jawaban paling tepat.
+
+Komposisi:
+
+- 20 soal kasus klinis sangat sulit.
+- 10 soal teori sangat sulit.
+
+## A. 20 soal kasus klinis sangat sulit
+
+Setiap kasus harus memiliki:
+- Identitas pasien.
+- Anamnesis.
+- Pemeriksaan fisik.
+- Hasil laboratorium.
+- Pertanyaan analisis.
+- Pilihan ABCD.
+
+Minimal soal mencakup:
+- 5 perhitungan MCV.
+- 4 perhitungan MCH.
+- 4 perhitungan MCHC.
+- 3 interpretasi gabungan indeks eritrosit.
+- Kasus anemia.
+- Morfologi eritrosit.
+- Leukosit dan hitung jenis.
+- Trombosit.
+- Hemostasis.
+- Gangguan koagulasi.
+- ABO dan Rh.
+
+Soal harus menghubungkan data klinis dan hasil laboratorium, bukan sekadar meminta definisi.
+
+Dokter harus tampil dalam narasi kasus dan memberikan edukasi kepada pasien serta menjelaskan rencana terapi yang sesuai dalam batas informasi yang tersedia.
+
+## B. 10 soal teori sangat sulit
+
+Materi:
+1. Hematopoiesis.
+2. Eritropoiesis.
+3. Struktur hemoglobin.
+4. Metabolisme eritrosit.
+5. Klasifikasi leukosit.
+6. Fungsi limfosit dan sistem imun.
+7. Trombopoiesis.
+8. Hemostasis.
+9. Kaskade koagulasi.
+10. Golongan darah ABO dan Rhesus.
+
+Tingkat kesulitan harus sesuai mahasiswa ATLM tingkat lanjut.
+
+### Ketentuan bank soal
+
+- Tidak ada soal duplikat.
+- Tidak ada soal ambigu.
+- Opsi harus masuk akal.
+- Tepat satu jawaban benar.
+- Semua perhitungan diverifikasi.
+- Satuan harus konsisten.
+- Kunci jawaban disimpan di backend.
+- Jangan tampilkan kunci sebelum kuis selesai.
+
+---
+
+# BAGIAN 13. PEMBAHASAN RINCI SETELAH KUIS
+
+Fitur ini WAJIB.
+
+Setelah mahasiswa menyelesaikan seluruh 30 soal, tampilkan:
+
+**HEMATOLOGY QUIZ REVIEW & DETAILED EXPLANATION**
+
+Untuk setiap soal, tampilkan:
+
+1. Nomor soal.
+2. Soal lengkap.
+3. Jawaban mahasiswa.
+4. Jawaban benar.
+5. Status benar atau salah.
+6. Pembahasan ilmiah.
+7. Alasan pilihan A.
+8. Alasan pilihan B.
+9. Alasan pilihan C.
+10. Alasan pilihan D.
+11. Konsep hematologi yang diuji.
+12. Referensi halaman PDF.
+
+Khusus kasus klinis:
+- Analisis anamnesis.
+- Analisis pemeriksaan fisik.
+- Analisis CBC.
+- Perhitungan MCV.
+- Perhitungan MCH.
+- Perhitungan MCHC.
+- Interpretasi hasil.
+- Penjelasan dokter.
+- Edukasi pasien.
+- Rencana pemeriksaan lanjutan.
+- Penatalaksanaan yang relevan.
+
+Untuk perhitungan tampilkan:
+- Data diketahui.
+- Rumus.
+- Substitusi.
+- Hasil.
+- Satuan.
+- Interpretasi.
+
+Pembahasan harus rinci tetapi mudah dipahami.
+
+Jangan hanya menampilkan kunci jawaban.
+
+Pembahasan baru terbuka setelah mahasiswa menyelesaikan kuis.
+
+---
+
+# BAGIAN 14. ANIMASI QUIZIZZ
+
+Buat pengalaman kuis seperti Quizizz.
+
+Tampilan:
+- Full-screen quiz.
+- Timer.
+- Countdown.
+- Progress bar.
+- Nomor soal.
+- Pilihan ABCD berbentuk tombol besar.
+- Animasi jawaban benar.
+- Animasi jawaban salah.
+- Skor.
+- Streak.
+- Combo.
+- XP.
+- Efek suara.
+- Animasi perpindahan soal.
+
+Tambahkan animasi:
+- Correct answer.
+- Wrong answer.
+- Time running out.
+- Level up.
+- Trophy.
+- Victory.
+- Confetti.
+
+Buat mode:
+1. Solo Quiz.
+2. Live Quiz with Lecturer.
+
+Dosen dapat:
+- Membuat sesi kuis.
+- Memilih bank soal.
+- Mengatur timer.
+- Mengacak soal.
+- Mengacak pilihan.
+- Mengatur percobaan.
+- Mengaktifkan pembahasan.
+- Menutup sesi.
+
+---
+
+# BAGIAN 15. IDENTITAS MAHASISWA DAN PENYIMPANAN HASIL
+
+Mahasiswa tidak melakukan registrasi akun.
+
+Pada saat memulai kuis, cukup sediakan:
+
+- Nama lengkap.
+- NPM.
+
+Tidak perlu:
+- Email.
+- Password.
+- Form registrasi.
+- Verifikasi email.
+- Akun mahasiswa.
+
+NPM menjadi identitas unik.
+
+Sistem harus:
+- Menghubungkan hasil dengan NPM.
+- Menyimpan seluruh percobaan.
+- Tidak menimpa nilai sebelumnya.
+- Mengenali mahasiswa yang sama.
+- Menyimpan tanggal dan waktu.
+- Menyimpan durasi pengerjaan.
+- Menyimpan jawaban setiap soal.
+
+Setiap percobaan mempunyai ID unik.
+
+---
+
+# BAGIAN 16. HASIL KUIS DAN DASHBOARD DOSEN
+
+Setelah mahasiswa menyelesaikan kuis, simpan hasil ke database.
+
+Dashboard dosen harus menampilkan:
+
+**STUDENT QUIZ PERFORMANCE**
+
+Kolom:
+- Nomor.
+- Nama.
+- NPM.
+- Kategori soal.
+- Nilai total.
+- Jawaban benar.
+- Jawaban salah.
+- Waktu pengerjaan.
+- Ranking.
+- Tanggal ujian.
+
+Dosen dapat:
+- Mencari nama mahasiswa.
+- Mencari NPM.
+- Filter kelas.
+- Melihat semua hasil.
+- Melihat jawaban setiap mahasiswa.
+- Melihat pembahasan setiap soal.
+- Melihat riwayat percobaan.
+- Mengurutkan nilai.
+- Mengunduh Excel/CSV.
+- Mencetak laporan.
+
+Buat analisis kelas:
+- Nilai rata-rata.
+- Nilai tertinggi.
+- Nilai terendah.
+- Persentase kelulusan.
+- Soal paling sulit.
+- Soal paling mudah.
+- Materi yang paling banyak salah.
+- Akurasi kasus klinis.
+- Akurasi teori.
+
+Data harus berasal dari database aktual, bukan data dummy.
+
+---
+
+# BAGIAN 17. LEADERBOARD ATLM CHAMPIONS
+
+Buat leaderboard dengan desain sangat mewah.
+
+Nama:
+
+**HEMATOLOGY WORLD CHAMPIONS**
+
+Tampilkan tiga pemenang utama di atas podium 3D:
+
+Juara 1:
+- Gold Hematology Champion.
+- Golden Trophy.
+- Gold ATLM Badge.
+
+Juara 2:
+- Silver Hematology Champion.
+- Silver Trophy.
+- Silver ATLM Badge.
+
+Juara 3:
+- Bronze Hematology Champion.
+- Bronze Trophy.
+- Bronze ATLM Badge.
+
+Gunakan avatar ATLM laki-laki dan perempuan dengan:
+- Jas laboratorium.
+- ID card.
+- Seragam profesional.
+- Animasi kemenangan.
+- Pose selebrasi.
+- Medali.
+- Trophy.
+
+Latar belakang:
+- Laboratorium hematologi futuristik.
+- Hematology analyzer.
+- Mikroskop digital.
+- Layar hologram.
+- Animasi sel darah.
+- Efek cahaya.
+- Display hasil pemeriksaan.
+
+Tampilkan tabel ranking di bawah podium.
+
+Ranking berdasarkan:
+1. Nilai tertinggi.
+2. Waktu pengerjaan tercepat jika nilai sama.
+3. Nilai kasus klinis sebagai pemecah seri berikutnya.
+
+Buat kategori:
+- Hematology Champion.
+- Best Clinical Analyst.
+- Best Laboratory Calculator.
+- MCV Specialist.
+- MCH Specialist.
+- MCHC Specialist.
+- Perfect Score.
+
+NPM harus disamarkan pada leaderboard publik. Data lengkap hanya tersedia untuk dosen.
+
+Leaderboard wajib menggunakan nilai aktual dari database.
+
+---
+
+# BAGIAN 18. DASHBOARD DOSEN
+
+Menu:
+1. Dashboard.
+2. Daftar peserta.
+3. Pengaturan kode akses.
+4. Riwayat aktivasi lifetime.
+5. Manajemen kelas.
+6. Bank soal.
+7. Kuis.
+8. Hasil kuis.
+9. Pembahasan.
+10. Analisis kelas.
+11. Leaderboard.
+12. Glosarium.
+13. Manajemen materi.
+14. Ekspor nilai.
+15. Pengaturan.
+
+Dosen dapat:
+- Mengubah kode akses mahasiswa baru.
+- Melihat mahasiswa yang sudah aktif lifetime.
+- Melihat mahasiswa yang belum mengerjakan kuis.
+- Melihat hasil kuis.
+- Melihat ranking.
+- Melihat pembahasan.
+- Mengelola glosarium.
+- Mengelola soal.
+- Mengatur kuis.
+
+Penting: mengganti kode akses mahasiswa baru tidak boleh menghapus atau mengubah akses lifetime mahasiswa lama.
+
+---
+
+# BAGIAN 19. SISTEM DATABASE
+
+Gunakan Supabase dan PostgreSQL atau backend setara.
+
+Buat tabel minimal:
+
+1. lecturers.
+2. student_access_codes.
+3. student_entitlements.
+4. student_profiles.
+5. quiz_sessions.
+6. quiz_attempts.
+7. questions.
+8. answer_options.
+9. student_answers.
+10. quiz_results.
+11. leaderboard.
+12. learning_modules.
+13. student_progress.
+14. glossary_terms.
+15. calculator_history.
+16. achievements.
+17. avatar_settings.
+
+Ketentuan:
+- NPM unik.
+- Aktivasi lifetime tersimpan permanen.
+- Kode akses disimpan aman dalam bentuk hash.
+- Setiap kode mempunyai versi.
+- Kode lama dapat dinonaktifkan.
+- Entitlement mahasiswa lama tidak ikut dinonaktifkan.
+- Nilai kuis tersimpan permanen.
+- Riwayat percobaan tidak ditimpa.
+- Hak akses dosen dan mahasiswa dipisahkan.
+- Gunakan server-side validation.
+- Gunakan Row Level Security.
+- Jangan menaruh secret key di frontend.
+
+Gunakan localStorage hanya untuk preferensi dan token sesi yang aman, bukan sebagai satu-satunya penyimpanan nilai.
+
+Jika kredensial database belum tersedia, buat integrasi dan panduan konfigurasi. Jangan mengklaim penyimpanan permanen sebelum backend benar-benar terhubung.
+
+---
+
+# BAGIAN 20. SISTEM AUDIO DAN MUSIK
+
+Setiap tombol harus memiliki efek suara.
+
+Tambahkan:
+- Click sound.
+- Navigation sound.
+- Door sound.
+- NPC interaction sound.
+- Quiz start sound.
+- Correct sound.
+- Wrong sound.
+- Victory sound.
+- Trophy sound.
+- Level up sound.
+
+Musik latar:
+- Medical technology.
+- Futuristic laboratory.
+- Science adventure.
+- Educational game.
+
+Pengaturan:
+- Musik ON/OFF.
+- Sound effect ON/OFF.
+- Volume musik.
+- Volume efek.
+- Volume dialog.
+
+Audio hanya dimulai setelah interaksi pertama pengguna.
+
+---
+
+# BAGIAN 21. TEKNOLOGI DAN IMPLEMENTASI GOOGLE AI STUDIO
+
+Gunakan:
+- React.
+- TypeScript.
+- Three.js.
+- React Three Fiber.
+- Tailwind CSS.
+- Framer Motion.
+- Supabase.
+- PostgreSQL.
+- Supabase Storage.
+
+Bangun aplikasi secara bertahap:
+
+Tahap 1:
+- Struktur website.
+- Landing page.
+- Login dosen.
+- Akses mahasiswa.
+- Sistem kode lifetime.
+- Database.
+
+Tahap 2:
+- Dashboard mahasiswa.
+- Dashboard dosen.
+- Materi.
+- Gambar PDF.
+- Glosarium.
+- Kalkulator.
+
+Tahap 3:
+- Bank soal 30 soal.
+- Quizizz.
+- Pembahasan.
+- Penyimpanan hasil.
+- Leaderboard.
+
+Tahap 4:
+- Dunia rumah sakit 3D.
+- Avatar ATLM.
+- NPC.
+- Laboratorium.
+- Animasi.
+- Audio.
+
+Tahap 5:
+- Integrasi.
+- Optimasi.
+- Pengujian.
+- Perbaikan bug.
+
+Jangan menghapus fitur yang telah berhasil dibuat pada tahap sebelumnya.
+
+---
+
+# BAGIAN 22. PENGUJIAN FINAL
+
+Lakukan pengujian nyata terhadap seluruh fungsi.
+
+Login:
+- Kode dosen awal.
+- Penggantian kode mahasiswa.
+- Aktivasi lifetime.
+- Akses mahasiswa tanpa registrasi.
+- Pemulihan akses.
+
+Game:
+- Avatar dapat bergerak.
+- Avatar dapat berlari cepat.
+- Avatar dapat melompat.
+- Kamera berfungsi.
+- NPC dapat berbicara.
+- Lingkungan dapat dijelajahi.
+
+Materi:
+- Semua modul dapat dibuka.
+- Gambar asli PDF tampil.
+- Diagram dapat diperbesar.
+- Glosarium dapat dicari.
+
+Kalkulator:
+- MCV benar.
+- MCH benar.
+- MCHC benar.
+- Satuan benar.
+- Validasi benar.
+
+Kuis:
+- Tepat 30 soal.
+- Tepat 20 kasus klinis.
+- Tepat 10 teori.
+- Semua pilihan ABCD.
+- Kunci benar.
+- Perhitungan benar.
+- Pembahasan lengkap.
+
+Dashboard:
+- Nama mahasiswa tersimpan.
+- NPM tersimpan.
+- Nilai masuk database.
+- Riwayat percobaan tersimpan.
+- Dashboard dosen menampilkan data aktual.
+- Leaderboard aktual.
+- Ekspor nilai berfungsi.
+
+Pastikan tidak ada tombol palsu dan tidak ada fitur yang hanya terlihat aktif.
+
+---
+
+# BAGIAN 23. HASIL AKHIR YANG SAYA INGINKAN
+
+Saya menginginkan website lengkap dengan:
+
+1. Rumah sakit 3D bergaya Roblox.
+2. Laboratorium hematologi mewah.
+3. Avatar ATLM laki-laki dan perempuan yang dapat dimainkan.
+4. NPC dokter, spesialis, pasien, dan perawat yang dapat diajak berbicara.
+5. Materi hematologi lengkap berdasarkan PDF.
+6. Gambar asli PDF.
+7. Laboratorium virtual.
+8. Simulasi kasus klinis.
+9. 30 soal super sulit ABCD.
+10. 20 soal kasus klinis.
+11. 10 soal teori.
+12. Pembahasan rinci seluruh soal.
+13. Kuis dengan animasi seperti Quizizz.
+14. Kalkulator digital MCV, MCH, MCHC.
+15. Glosarium istilah medis dan pengertiannya.
+16. Login dosen.
+17. Akses mahasiswa tanpa registrasi.
+18. Sistem kode lifetime.
+19. Penggantian kode untuk mahasiswa baru.
+20. Dashboard dosen.
+21. Dashboard mahasiswa.
+22. Penyimpanan nilai permanen.
+23. Leaderboard ATLM.
+24. Podium pemenang 3D.
+25. Trophy dan badge.
+26. Musik dan efek suara.
+27. Ekspor hasil nilai.
+28. Database.
+29. Dokumentasi instalasi dan deployment.
+
+**PRIORITAS PALING UTAMA:**
+
+- Jangan membuat mahasiswa melakukan registrasi.
+- Mahasiswa hanya memasukkan nama dan NPM ketika mengerjakan kuis.
+- Kode akses dosen hanya diperlukan untuk aktivasi awal.
+- Akses mahasiswa yang sudah aktif harus berlaku seumur hidup.
+- Penggantian kode untuk mahasiswa baru tidak boleh mengganggu mahasiswa lama.
+- Semua hasil kuis harus dapat dilihat dosen.
+- Pembahasan soal harus lengkap.
+- Kalkulator dan glosarium harus benar-benar berfungsi.
+- Leaderboard harus berdasarkan nilai nyata.
+- Hanya avatar ATLM yang dapat dimainkan.
+- NPC rumah sakit harus dapat diajak berkomunikasi.
+- Semua gambar asli PDF harus dimasukkan.
+
+BANGUN HEMATOLOGY WORLD SEBAGAI PLATFORM GAME EDUKASI MEDIS 3D YANG BENAR-BENAR FUNGSIONAL, PROFESIONAL, INTERAKTIF, DAN SIAP DIGUNAKAN MAHASISWA ATLM.
+
+Jangan berhenti pada desain awal. Implementasikan seluruh sistem sampai terintegrasi dan lakukan pengujian sebelum menyatakan aplikasi selesai.
