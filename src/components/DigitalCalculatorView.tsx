@@ -65,7 +65,9 @@ export const DigitalCalculatorView: React.FC<DigitalCalculatorViewProps> = ({ st
   const [savedToast, setSavedToast] = useState<boolean>(false);
 
   const loadHistory = () => {
-    fetch(`/api/calculator/history?npm=${encodeURIComponent(studentNpm)}`)
+    fetch(`/api/calculator/history?npm=${encodeURIComponent(studentNpm)}`, {
+      credentials: 'include',
+    })
       .then((r) => r.json())
       .then((d) => {
         if (d.history) setHistory(d.history);
@@ -165,6 +167,7 @@ export const DigitalCalculatorView: React.FC<DigitalCalculatorViewProps> = ({ st
       await fetch('/api/calculator/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           npm: studentNpm,
           hb,

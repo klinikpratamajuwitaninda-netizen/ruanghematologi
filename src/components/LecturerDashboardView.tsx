@@ -25,6 +25,7 @@ import {
   Lock,
   Unlock,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 
 interface LecturerDashboardProps {
@@ -35,7 +36,7 @@ interface LecturerDashboardProps {
 export const LECTURER_MENUS = [
   { id: 'dashboard', label: '1. Dashboard Dosen', icon: LayoutDashboard },
   { id: 'participants', label: '2. Daftar Peserta', icon: Users },
-  { id: 'access_codes', label: '3. Pengaturan Kode Akses', icon: KeyRound },
+  { id: 'access_codes', label: '3. Kode Aktivasi Mahasiswa', icon: KeyRound },
   { id: 'lifetime_history', label: '4. Riwayat Aktivasi Mahasiswa', icon: ShieldCheck },
   { id: 'class_mgmt', label: '5. Manajemen Kelas', icon: GraduationCap },
   { id: 'question_bank', label: '6. Bank Soal (50 A–E)', icon: FileQuestion },
@@ -73,6 +74,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       fullName: string;
       className: string;
       activatedWithCodeVersion: number;
+      activatedWithCodeDisplay?: string;
       lifetimeAccess: boolean;
       revoked: boolean;
       activatedAt: string;
@@ -96,6 +98,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       codeLabel: string;
       version: number;
       isActive: boolean;
+      activatedCount?: number;
       createdBy: string;
       createdAt: string;
     }>;
@@ -131,8 +134,9 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
   // Forms state
   const [newAccessCode, setNewAccessCode] = useState<string>('');
   const [newCodeLabel, setNewCodeLabel] = useState<string>('');
-  const [deactivateOld, setDeactivateOld] = useState<boolean>(true);
+  const [batchCount, setBatchCount] = useState<number>(5);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   const [newUsername, setNewUsername] = useState<string>('dr.juwita');
   const [newPassword, setNewPassword] = useState<string>('');
@@ -145,12 +149,19 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
 
   const fetchDashboard = async () => {
     setLoading(true);
+    setErrorBanner(null);
     try {
       const [resDash, resLb, resGloss] = await Promise.all([
-        fetch('/api/lecturer/dashboard'),
-        fetch('/api/leaderboard?role=lecturer'),
-        fetch('/api/glossary'),
+        fetch('/api/lecturer/dashboard', { credentials: 'include' }),
+        fetch('/api/leaderboard?role=lecturer', { credentials: 'include' }),
+        fetch('/api/glossary', { credentials: 'include' }),
       ]);
+
+      if (resDash.status === 401 || resDash.status === 403) {
+        onLogout();
+        return;
+      }
+
       const d = await resDash.json();
       const lb = await resLb.json();
       const gl = await resGloss.json();
@@ -174,35 +185,74 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
     e.preventDefault();
     if (!newAccessCode.trim()) return;
     soundManager.playClick();
+    setStatusBanner(null);
+    setErrorBanner(null);
     try {
       const res = await fetch('/api/lecturer/access-codes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          newCode: newAccessCode.trim(),
+          newCode: newAccessCode.trim().toUpperCase(),
           codeLabel: newCodeLabel.trim() || undefined,
-          deactivateOldCodes: deactivateOld,
         }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setStatusBanner(data.message);
         setNewAccessCode('');
         setNewCodeLabel('');
         fetchDashboard();
+      } else {
+        setErrorBanner(data.error || 'Gagal menerbitkan kode aktivasi.');
       }
     } catch {
-      // ignore
+      setErrorBanner('Gagal menghubungi server.');
+    }
+  };
+
+  const handleGenerateBatchCodes = async () => {
+    soundManager.playClick();
+    setStatusBanner(null);
+    setErrorBanner(null);
+    try {
+      const res = await fetch('/api/lecturer/access-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          batchCount,
+          codeLabel: newCodeLabel.trim() || 'Kode Aktivasi Unik Mahasiswa ATLM',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStatusBanner(data.message);
+        fetchDashboard();
+      } else {
+        setErrorBanner(data.error || 'Gagal menerbitkan batch kode aktivasi.');
+      }
+    } catch {
+      setErrorBanner('Gagal menghubungi server.');
     }
   };
 
   const handleToggleCodeActive = async (id: number, currentActive: boolean) => {
     soundManager.playClick();
-    await fetch(`/api/lecturer/access-codes/${id}`, {
+    setStatusBanner(null);
+    setErrorBanner(null);
+    const res = await fetch(`/api/lecturer/access-codes/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ isActive: !currentActive }),
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setErrorBanner(data.error || 'Tidak dapat mengubah status kode ini.');
+    } else if (data.message) {
+      setStatusBanner(data.message);
+    }
     fetchDashboard();
   };
 
@@ -211,6 +261,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
     await fetch('/api/lecturer/toggle-entitlement', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ npm, revoked: !currentRevoked }),
     });
     fetchDashboard();
@@ -219,9 +270,12 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
   const handleSaveCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) return;
+    setStatusBanner(null);
+    setErrorBanner(null);
     const res = await fetch('/api/auth/lecturer/setup-credentials', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         newUsername,
         newPassword,
@@ -229,9 +283,11 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       }),
     });
     const d = await res.json();
-    if (d.success) {
+    if (res.ok && d.success) {
       setStatusBanner('Kredensial pribadi Dosen berhasil diperbarui!');
       setNewPassword('');
+    } else {
+      setErrorBanner(d.error || 'Gagal memperbarui kredensial.');
     }
   };
 
@@ -241,6 +297,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
     const res = await fetch('/api/glossary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         term: newTerm,
         abbreviation: newAbbr,
@@ -328,6 +385,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                   soundManager.playClick();
                   setActiveMenu(m.id);
                   setStatusBanner(null);
+                  setErrorBanner(null);
                 }}
                 className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2.5 transition ${
                   active
@@ -346,7 +404,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
               onClick={onLogout}
               className="w-full px-3.5 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white text-xs font-semibold transition"
             >
-              Keluar dari Mode Dosen
+              Logout dari Portal Dosen
             </button>
           </div>
         </nav>
@@ -389,14 +447,20 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
 
         {statusBanner && (
           <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{statusBanner}</span>
+          </div>
+        )}
+
+        {errorBanner && (
+          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-semibold flex items-center gap-2">
+            <span>{errorBanner}</span>
           </div>
         )}
 
         {loading || !dashData ? (
           <div className="p-12 bg-white rounded-2xl border border-slate-200 text-center text-sm font-mono text-slate-500">
-            Memuat data real-time kelas dari database PostgreSQL...
+            Memuat data real-time kelas dari database...
           </div>
         ) : (
           <>
@@ -437,11 +501,13 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                     </p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                    <p className="text-xs font-mono uppercase text-slate-500">Kode Aktivasi Dosen</p>
-                    <p className="text-3xl font-mono font-bold text-indigo-700 mt-1">
-                      040186
+                    <p className="text-xs font-mono uppercase text-slate-500">
+                      Kode Mahasiswa Tersedia
                     </p>
-                    <p className="text-[11px] text-slate-500 mt-1">Versi Aktif: V{dashData.metrics.activeAccessCodeVersion}</p>
+                    <p className="text-3xl font-mono font-bold text-indigo-700 mt-1">
+                      {dashData.metrics.activeAccessCodeVersion}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-1">1 Kode Unik = 1 Mahasiswa</p>
                   </div>
                 </div>
 
@@ -454,7 +520,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
             {(activeMenu === 'participants' || activeMenu === 'quiz_results') && (
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
                 <h3 className="text-lg font-bold text-slate-900">
-                  Daftar Peserta & Riwayat Nilai Ujian Hematologi (30 Soal ABCD)
+                  Daftar Peserta & Riwayat Nilai Ujian Hematologi (50 Soal A–E)
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
@@ -505,105 +571,140 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
               </div>
             )}
 
-            {/* MENU 3: ACCESS CODE VERSION MANAGEMENT */}
+            {/* MENU 3: UNIQUE ONE-TIME STUDENT ACTIVATION CODE MANAGEMENT */}
             {activeMenu === 'access_codes' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-                  <h3 className="text-base font-bold text-slate-900">
-                    Buat Kode Akses Kelas Baru (Versioning)
-                  </h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    <strong>Aturan Permanen Lifetime Access:</strong> Mengubah atau menonaktifkan kode
-                    akses lama (misal <code className="font-mono">121201</code>) hanya berlaku untuk{' '}
-                    <strong>pendaftar baru</strong>. Mahasiswa yang sudah pernah aktivasi dengan NPM
-                    mereka <strong>tidak akan pernah kehilangan akses atau nilai</strong>.
-                  </p>
-                  <form onSubmit={handleCreateAccessCode} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                        Kode Akses Kelas Baru
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={newAccessCode}
-                        onChange={(e) => setNewAccessCode(e.target.value)}
-                        placeholder="Contoh: 567890 atau ATLM2026"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-sm"
-                      />
+                <div className="lg:col-span-5 space-y-5">
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+                    <h3 className="text-base font-bold text-slate-900">
+                      Terbitkan Kode Aktivasi Unik Mahasiswa (1 Kode = 1 Mahasiswa)
+                    </h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      <strong>Aturan Keamanan & Lisensi Seumur Hidup:</strong> Setiap mahasiswa
+                      mendapatkan satu kode aktivasi unik dari Dosen. Satu kode hanya berlaku satu
+                      kali untuk satu NPM mahasiswa dan mengaktifkan akun mahasiswa tersebut secara
+                      permanen seumur hidup.
+                    </p>
+                    <form onSubmit={handleCreateAccessCode} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                          Kode Aktivasi Unik Baru
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newAccessCode}
+                          onChange={(e) => setNewAccessCode(e.target.value.toUpperCase())}
+                          placeholder="Contoh: ATLM-IKES-015"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
+                          Label / Nama Mahasiswa atau Kelas (Opsional)
+                        </label>
+                        <input
+                          type="text"
+                          value={newCodeLabel}
+                          onChange={(e) => setNewCodeLabel(e.target.value)}
+                          placeholder="Contoh: Kelas ATLM Reguler A"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-4 h-4" /> Terbitkan 1 Kode Aktivasi Unik
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      Generate Otomatis Batch Kode Unik Kelas
+                    </h3>
+                    <p className="text-xs text-slate-600">
+                      Buat beberapa kode aktivasi unik sekaligus untuk dibagikan kepada mahasiswa di
+                      kelas.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={batchCount}
+                        onChange={(e) => setBatchCount(Number(e.target.value))}
+                        className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono bg-white"
+                      >
+                        <option value={5}>5 Kode Unik</option>
+                        <option value={10}>10 Kode Unik</option>
+                        <option value={20}>20 Kode Unik</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleGenerateBatchCodes}
+                        className="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold"
+                      >
+                        + Generate {batchCount} Kode Unik
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                        Label / Keterangan Angkatan
-                      </label>
-                      <input
-                        type="text"
-                        value={newCodeLabel}
-                        onChange={(e) => setNewCodeLabel(e.target.value)}
-                        placeholder="Contoh: Gelombang 2 Praktikum Hematologi"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                      />
-                    </div>
-                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={deactivateOld}
-                        onChange={(e) => setDeactivateOld(e.target.checked)}
-                        className="rounded"
-                      />
-                      <span>Nonaktifkan kode akses versi sebelumnya untuk mahasiswa baru</span>
-                    </label>
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5"
-                    >
-                      <Plus className="w-4 h-4" /> Simpan & Aktifkan Kode Akses Baru
-                    </button>
-                  </form>
+                  </div>
                 </div>
 
                 <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
                   <h3 className="text-base font-bold text-slate-900">
-                    Riwayat Versi Kode Akses Kelas
+                    Daftar Kode Aktivasi Unik Mahasiswa ({dashData.accessCodes.length} Kode)
                   </h3>
-                  <div className="space-y-3">
-                    {dashData.accessCodes.map((c) => (
-                      <div
-                        key={c.id}
-                        className="p-4 rounded-xl border border-slate-200 flex items-center justify-between gap-4"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-xs font-bold">
-                              Versi {c.version}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                    {dashData.accessCodes.map((c) => {
+                      const isUsed = (c.activatedCount || 0) > 0;
+                      return (
+                        <div
+                          key={c.id}
+                          className="p-4 rounded-xl border border-slate-200 flex items-center justify-between gap-4"
+                        >
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-xs font-bold">
+                                #{c.version}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
+                                  isUsed
+                                    ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                                    : c.isActive
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                {isUsed
+                                  ? 'SUDAH DIGUNAKAN (TERIKAT PERMANEN 1 NPM)'
+                                  : c.isActive
+                                  ? 'TERSEDIA UNTUK 1 MAHASISWA BARU'
+                                  : 'DINONAKTIFKAN'}
+                              </span>
+                            </div>
+                            <p className="text-sm font-mono font-bold text-slate-900 mt-1.5">
+                              {c.codeLabel}
+                            </p>
+                            <p className="text-xs text-slate-500 font-mono">
+                              Diterbitkan oleh: {c.createdBy}
+                            </p>
+                          </div>
+                          {!isUsed && (
+                            <button
+                              onClick={() => handleToggleCodeActive(c.id, c.isActive)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 ${
                                 c.isActive
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-slate-100 text-slate-500'
+                                  ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
                               }`}
                             >
-                              {c.isActive ? 'AKTIF UNTUK MAHASISWA BARU' : 'NONAKTIF (ARSIP)'}
-                            </span>
-                          </div>
-                          <p className="text-sm font-bold text-slate-900 mt-1">{c.codeLabel}</p>
-                          <p className="text-xs text-slate-500 font-mono">
-                            Dibuat oleh: {c.createdBy}
-                          </p>
+                              {c.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                            </button>
+                          )}
                         </div>
-                        <button
-                          onClick={() => handleToggleCodeActive(c.id, c.isActive)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                            c.isActive
-                              ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                          }`}
-                        >
-                          {c.isActive ? 'Nonaktifkan' : 'Aktifkan Kembali'}
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -618,8 +719,8 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                       Tabel Hak Akses Seumur Hidup Mahasiswa (Student Lifetime Entitlements)
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Setiap NPM yang tercantum di bawah ini memiliki akses permanen seumur hidup
-                      sekalipun kode akses kelas diubah.
+                      Setiap NPM yang tercantum di bawah ini terhubung secara permanen dengan kode
+                      aktivasi unik masing-masing.
                     </p>
                   </div>
                 </div>
@@ -630,7 +731,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                         <th className="py-3 px-3">NPM</th>
                         <th className="py-3 px-3">Nama Lengkap</th>
                         <th className="py-3 px-3">Kelas</th>
-                        <th className="py-3 px-3">Diaktivasi dengan Kode</th>
+                        <th className="py-3 px-3">Kode Aktivasi Terikat</th>
                         <th className="py-3 px-3">Status Lifetime</th>
                         <th className="py-3 px-3">Kontrol Dosen</th>
                       </tr>
@@ -645,8 +746,10 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                             {ent.fullName}
                           </td>
                           <td className="py-3 px-3 text-slate-600">{ent.className}</td>
-                          <td className="py-3 px-3 font-mono">
-                            Versi {ent.activatedWithCodeVersion}
+                          <td className="py-3 px-3 font-mono text-sky-800 font-semibold">
+                            {ent.activatedWithCodeDisplay
+                              ? ent.activatedWithCodeDisplay.split('•')[0].trim()
+                              : `Kode Unik #${ent.activatedWithCodeVersion}`}
                           </td>
                           <td className="py-3 px-3">
                             {ent.revoked ? (
@@ -1003,9 +1106,9 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                   Pengaturan Kredensial Pribadi Dosen Pengampu
                 </h3>
                 <p className="text-xs text-slate-600">
-                  Anda dapat memperbarui username dan password pribadi Dosen kapan saja. Kode
-                  aktivasi dosen (<code className="font-mono font-bold">040186</code>) selalu aktif di
-                  server.
+                  Anda dapat memperbarui username dan password/kode akses pribadi Dosen kapan saja.
+                  Validasi dilakukan secara kriptografis (SHA-256) di server dan dilindungi oleh
+                  Cloudflare Worker Secret.
                 </p>
                 <form onSubmit={handleSaveCredentials} className="space-y-4 text-xs">
                   <div>
@@ -1022,14 +1125,14 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                   </div>
                   <div>
                     <label className="block font-bold uppercase text-slate-700 mb-1">
-                      Password Baru Dosen
+                      Password / Kode Rahasia Baru Dosen
                     </label>
                     <input
                       type="password"
                       required
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Minimal 4 karakter"
+                      placeholder="Minimal 6 karakter"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
                     />
                   </div>

@@ -1,0 +1,19 @@
+name = "hematology-world"
+main = "worker.ts"
+compatibility_date = "2025-03-01"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# Optional Cloudflare D1 Database Binding (auto-initializes tables on first request):
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "hematology-world-db"
+# database_id = "<YOUR_CLOUDFLARE_D1_DATABASE_ID>"
+
+# Required Server-Side Secrets (Configure via Cloudflare Dashboard or CLI):
+# wrangler secret put TEACHER_ACCESS_CODE
+# wrangler secret put SESSION_SECRET

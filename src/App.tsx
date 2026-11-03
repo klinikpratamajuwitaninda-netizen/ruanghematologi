@@ -66,6 +66,19 @@ type StudentMenuId =
   | 'avatar_settings'
   | 'audio_settings';
 
+interface QuizHistoryEntry {
+  id: number;
+  attemptUuid: string;
+  sessionCode: string;
+  totalQuestions: number;
+  correctCount: number;
+  wrongCount: number;
+  accuracyPercent: number;
+  score: number;
+  durationSeconds: number;
+  completedAt: string;
+}
+
 interface StudentSessionData {
   npm: string;
   fullName: string;
@@ -75,17 +88,22 @@ interface StudentSessionData {
   level: number;
   highestScore: number;
   bestAccuracy: number;
-  sessionToken: string;
+  quizCount?: number;
+  isLifetimeActive?: boolean;
   activatedWithVersion: number;
+  activatedWithCodeDisplay?: string;
+  activatedCode?: string;
+  activatedAt?: string;
   labCoatColor?: string;
   scrubColor?: string;
   hairColor?: string;
   skinTone?: string;
   completedModules?: number[];
+  quizHistory?: QuizHistoryEntry[];
 }
 
 const STUDENT_14_MENUS: { id: StudentMenuId; label: string; icon: React.ElementType }[] = [
-  { id: 'home', label: 'Home & Profil Klinis', icon: Home },
+  { id: 'home', label: 'Home & Dashboard', icon: Home },
   { id: 'explore_hospital', label: 'Explore Hospital 3D', icon: Compass },
   { id: 'virtual_lab', label: 'Virtual Hematology Lab', icon: Microscope },
   { id: 'learning_materials', label: 'Learning Materials (35)', icon: BookOpen },
@@ -181,39 +199,42 @@ export default function App() {
 
   // Student Lifetime Session State
   const [studentSession, setStudentSession] = useState<StudentSessionData>({
-    npm: '24011001',
-    fullName: 'Mahasiswa ATLM IKES Rajawali',
+    npm: '',
+    fullName: 'Pengunjung (Belum Login)',
     className: 'ATLM Reguler A - IKES Rajawali',
     avatarGender: 'female_atlm',
-    xp: 250,
-    level: 2,
+    xp: 100,
+    level: 1,
     highestScore: 0,
     bestAccuracy: 0,
-    sessionToken: '',
+    quizCount: 0,
+    isLifetimeActive: false,
     activatedWithVersion: 1,
+    activatedWithCodeDisplay: '',
     labCoatColor: '#ffffff',
     scrubColor: '#0284c7',
     hairColor: '#1e293b',
     skinTone: '#f1c27d',
-    completedModules: [1, 2],
+    completedModules: [],
+    quizHistory: [],
   });
   const [isStudentActivated, setIsStudentActivated] = useState<boolean>(false);
 
   // Modals for Student Activation & Lecturer Login
   const [showAuthModal, setShowAuthModal] = useState<'student' | 'lecturer' | null>(null);
-  const [studentAuthTab, setStudentAuthTab] = useState<'activate' | 'recover'>('activate');
+  const [studentAuthTab, setStudentAuthTab] = useState<'login' | 'activate'>('login');
   const [formFullName, setFormFullName] = useState<string>('');
   const [formNpm, setFormNpm] = useState<string>('');
   const [formClass, setFormClass] = useState<string>('ATLM Reguler A - IKES Rajawali');
-  const [formAccessCode, setFormAccessCode] = useState<string>('040186');
+  const [formAccessCode, setFormAccessCode] = useState<string>('');
   const [formGender, setFormGender] = useState<'male_atlm' | 'female_atlm'>('female_atlm');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
 
-  // Lecturer Login Form (Default easy activation code: 040186)
-  const [lecturerBootstrapCode, setLecturerBootstrapCode] = useState<string>('040186');
+  // Lecturer Login Form (No hardcoded secrets in frontend)
+  const [lecturerBootstrapCode, setLecturerBootstrapCode] = useState<string>('');
   const [lecturerUsername, setLecturerUsername] = useState<string>('dr.juwita');
-  const [lecturerPassword, setLecturerPassword] = useState<string>('040186');
+  const [lecturerPassword, setLecturerPassword] = useState<string>('');
   const [lecturerTab, setLecturerTab] = useState<'bootstrap' | 'credentials'>('bootstrap');
 
   // Learning Modules State
@@ -237,35 +258,41 @@ export default function App() {
   // Audio Settings State
   const [soundSettings, setSoundSettings] = useState(soundManager.getSettings());
 
-  // Restore saved lifetime student session from localStorage on mount
-  useEffect(() => {
-    const savedNpm = localStorage.getItem('hw_lifetime_npm');
-    const savedToken = localStorage.getItem('hw_lifetime_token');
-    if (savedNpm || savedToken) {
-      fetch('/api/auth/student/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ npm: savedNpm, sessionToken: savedToken }),
-      })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.success && d.student) {
-            setStudentSession((prev) => ({
-              ...prev,
-              ...d.student,
-              labCoatColor: d.student.avatar?.labCoatColor || '#ffffff',
-              scrubColor: d.student.avatar?.scrubColor || '#0284c7',
-              hairColor: d.student.avatar?.hairColor || '#1e293b',
-              skinTone: d.student.avatar?.skinTone || '#f1c27d',
-            }));
-            setIsStudentActivated(true);
-          }
-        })
-        .catch(() => {});
+  const applyStudentPayload = (student: any) => {
+    setStudentSession((prev) => ({
+      ...prev,
+      ...student,
+      labCoatColor: student.avatar?.labCoatColor || prev.labCoatColor || '#ffffff',
+      scrubColor: student.avatar?.scrubColor || prev.scrubColor || '#0284c7',
+      hairColor: student.avatar?.hairColor || prev.hairColor || '#1e293b',
+      skinTone: student.avatar?.skinTone || prev.skinTone || '#f1c27d',
+      completedModules: Array.isArray(student.completedModules) ? student.completedModules : [],
+      quizHistory: Array.isArray(student.quizHistory) ? student.quizHistory : [],
+    }));
+    if (student.latestSummary && Array.isArray(student.latestReview)) {
+      setLastQuizSummary(student.latestSummary);
+      setLastQuizReview(student.latestReview);
     }
+    setIsStudentActivated(true);
+  };
+
+  // Restore session from secure HttpOnly cookie via /api/auth/me on mount
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.lecturer) {
+          setLecturerName(d.lecturer.fullName || 'dr. Juwita Ninda Suherman, M.Kes');
+          setIsLecturerLoggedIn(true);
+        }
+        if (d.student) {
+          applyStudentPayload(d.student);
+        }
+      })
+      .catch(() => {});
 
     fetchLeaderboard();
-    fetch('/api/glossary')
+    fetch('/api/glossary', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
         if (d.terms) setGlossaryItems(d.terms);
@@ -274,12 +301,24 @@ export default function App() {
   }, []);
 
   const fetchLeaderboard = () => {
-    fetch('/api/leaderboard')
+    fetch('/api/leaderboard', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
         if (d.leaderboard) setLeaderboardEntries(d.leaderboard);
       })
       .catch(() => {});
+  };
+
+  const handleNavigateMenu = (menuId: StudentMenuId) => {
+    soundManager.playNavigation();
+    if (menuId !== 'home' && menuId !== 'audio_settings' && !isStudentActivated) {
+      setAuthError(
+        'Silakan masuk menggunakan NPM aktif atau lakukan aktivasi akun mahasiswa terlebih dahulu untuk mengakses fitur pembelajaran dan kuis.'
+      );
+      setShowAuthModal('student');
+      return;
+    }
+    setActiveMenu(menuId);
   };
 
   const handleStudentActivate = async (e: React.FormEvent) => {
@@ -290,11 +329,16 @@ export default function App() {
 
     try {
       const endpoint =
-        studentAuthTab === 'recover' ? '/api/auth/student/session' : '/api/auth/student/activate';
+        studentAuthTab === 'login' ? '/api/student-login' : '/api/auth/student/activate';
       const payload =
-        studentAuthTab === 'recover'
-          ? { npm: formNpm.trim() }
+        studentAuthTab === 'login'
+          ? {
+              mode: 'login',
+              npm: formNpm.trim(),
+              accessCode: formAccessCode.trim() || undefined,
+            }
           : {
+              mode: 'activate',
               fullName: formFullName.trim(),
               npm: formNpm.trim(),
               className: formClass.trim(),
@@ -305,32 +349,60 @@ export default function App() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         soundManager.playWrong();
-        setAuthError(data.error || 'Aktivasi gagal.');
+        setAuthError(data.error || 'Gagal memproses login/aktivasi mahasiswa.');
         return;
       }
 
       soundManager.playLevelUp();
-      localStorage.setItem('hw_lifetime_npm', data.student.npm);
-      localStorage.setItem('hw_lifetime_token', data.student.sessionToken || '');
-
-      setStudentSession((prev) => ({
-        ...prev,
-        ...data.student,
-      }));
-      setIsStudentActivated(true);
-      setAuthSuccess(data.message || 'Akses Lifetime ATLM Aktif!');
+      applyStudentPayload(data.student);
+      setFormAccessCode('');
+      setAuthSuccess(data.message || 'Sesi Akses Seumur Hidup Mahasiswa Aktif!');
       setTimeout(() => {
         setShowAuthModal(null);
         setAuthSuccess(null);
-      }, 900);
+      }, 700);
     } catch {
-      setAuthError('Gagal menghubungi server.');
+      setAuthError('Gagal menghubungi server autentikasi.');
     }
+  };
+
+  const handleStudentLogout = async () => {
+    soundManager.playClick();
+    await fetch('/api/student-logout', {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {});
+    setIsStudentActivated(false);
+    setLastQuizSummary(null);
+    setLastQuizReview([]);
+    setStudentSession({
+      npm: '',
+      fullName: 'Pengunjung (Belum Login)',
+      className: 'ATLM Reguler A - IKES Rajawali',
+      avatarGender: 'female_atlm',
+      xp: 100,
+      level: 1,
+      highestScore: 0,
+      bestAccuracy: 0,
+      quizCount: 0,
+      isLifetimeActive: false,
+      activatedWithVersion: 1,
+      activatedWithCodeDisplay: '',
+      labCoatColor: '#ffffff',
+      scrubColor: '#0284c7',
+      hairColor: '#1e293b',
+      skinTone: '#f1c27d',
+      completedModules: [],
+      quizHistory: [],
+    });
+    setActiveMenu('home');
+    setShowAuthModal(null);
   };
 
   const handleLecturerLogin = async (e: React.FormEvent) => {
@@ -341,12 +413,13 @@ export default function App() {
     try {
       const payload =
         lecturerTab === 'bootstrap'
-          ? { bootstrapCode: lecturerBootstrapCode.trim() }
+          ? { accessCode: lecturerBootstrapCode.trim() }
           : { username: lecturerUsername.trim(), password: lecturerPassword.trim() };
 
-      const res = await fetch('/api/auth/lecturer/login', {
+      const res = await fetch('/api/teacher-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -357,6 +430,8 @@ export default function App() {
       }
 
       soundManager.playVictory();
+      setLecturerBootstrapCode('');
+      setLecturerPassword('');
       setLecturerName(data.lecturer?.fullName || 'dr. Juwita Ninda Suherman, M.Kes');
       setIsLecturerLoggedIn(true);
       setShowAuthModal(null);
@@ -365,30 +440,28 @@ export default function App() {
     }
   };
 
+  const handleLecturerLogout = async () => {
+    soundManager.playClick();
+    await fetch('/api/teacher-logout', {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {});
+    setIsLecturerLoggedIn(false);
+  };
+
   const handleLecturerGoogleLogin = async () => {
     setAuthError(null);
     try {
       const result = await signInWithPopup(auth, googleAuthProvider);
       const user = result.user;
-      const res = await fetch('/api/auth/lecturer/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firebaseUid: user.uid,
-          email: user.email,
-          displayName: user.displayName || 'dr. Juwita Ninda Suherman, M.Kes',
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        soundManager.playVictory();
-        setLecturerName('dr. Juwita Ninda Suherman, M.Kes');
-        setIsLecturerLoggedIn(true);
-        setShowAuthModal(null);
+      if (user.email !== 'klinikpratamajuwitaninda@gmail.com' && user.email !== 'juwita.ninda@ikesrajawali.ac.id') {
+        setAuthError('Email Google ini tidak terdaftar sebagai Dosen Pengampu.');
+        return;
       }
+      setAuthError('Silakan masukkan Kode Akses Rahasia Dosen untuk memverifikasi sesi server.');
     } catch (error) {
       console.error('Google Sign-In error:', error);
-      setAuthError('Login Google dibatalkan atau gagal. Gunakan Kode Aktivasi Dosen (040186).');
+      setAuthError('Login Google dibatalkan. Silakan masukkan Kode Akses Dosen.');
     }
   };
 
@@ -405,6 +478,7 @@ export default function App() {
       await fetch('/api/student/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ npm: studentSession.npm, moduleNumber: modNum }),
       }).catch(() => {});
     }
@@ -415,6 +489,7 @@ export default function App() {
     await fetch('/api/student/avatar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         npm: studentSession.npm,
         gender: studentSession.avatarGender,
@@ -432,7 +507,7 @@ export default function App() {
     return (
       <LecturerDashboardView
         lecturerName={lecturerName}
-        onLogout={() => setIsLecturerLoggedIn(false)}
+        onLogout={handleLecturerLogout}
       />
     );
   }
@@ -487,32 +562,45 @@ export default function App() {
           {/* Right Student Lifetime Status & Lecturer Portal Trigger */}
           <div className="flex items-center gap-2.5">
             {isStudentActivated ? (
-              <button
-                onClick={() => setShowAuthModal('student')}
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-mono flex items-center gap-2"
-              >
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="hidden sm:inline font-sans font-semibold text-white">
-                  {studentSession.fullName}
-                </span>
-                <span>NPM: {studentSession.npm}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setAuthError(null);
+                    setShowAuthModal('student');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-mono flex items-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="hidden sm:inline font-sans font-semibold text-white">
+                    {studentSession.fullName}
+                  </span>
+                  <span>NPM: {studentSession.npm}</span>
+                </button>
+                <button
+                  onClick={handleStudentLogout}
+                  className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white text-xs font-semibold transition"
+                >
+                  Logout
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => {
                   soundManager.playClick();
+                  setAuthError(null);
                   setShowAuthModal('student');
                 }}
                 className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow"
               >
                 <KeyRound className="w-3.5 h-3.5" />
-                Aktivasi Akses Lifetime Mahasiswa
+                Login / Aktivasi Mahasiswa
               </button>
             )}
 
             <button
               onClick={() => {
                 soundManager.playClick();
+                setAuthError(null);
                 setShowAuthModal('lecturer');
               }}
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition"
@@ -532,10 +620,7 @@ export default function App() {
               return (
                 <button
                   key={m.id}
-                  onClick={() => {
-                    soundManager.playNavigation();
-                    setActiveMenu(m.id);
-                  }}
+                  onClick={() => handleNavigateMenu(m.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition ${
                     isActive
                       ? 'bg-sky-600 text-white font-semibold shadow'
@@ -611,7 +696,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         soundManager.playDoor();
-                        setActiveMenu('explore_hospital');
+                        handleNavigateMenu('explore_hospital');
                       }}
                       className="px-5 py-3 rounded-xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-md transition"
                     >
@@ -620,7 +705,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         soundManager.playQuizStart();
-                        setActiveMenu('hematology_quiz');
+                        handleNavigateMenu('hematology_quiz');
                       }}
                       className="px-5 py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-md transition"
                     >
@@ -629,7 +714,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         soundManager.playClick();
-                        setActiveMenu('learning_materials');
+                        handleNavigateMenu('learning_materials');
                       }}
                       className="px-5 py-3 rounded-xl bg-[#345275] hover:bg-[#3f628a] border border-sky-300/30 text-white font-semibold text-sm flex items-center gap-2 transition"
                     >
@@ -698,10 +783,95 @@ export default function App() {
               </div>
             </div>
 
+            {/* Student Dashboard Status Card */}
+            {isStudentActivated ? (
+              <div className="bg-white rounded-2xl border-2 border-emerald-300 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-mono text-[11px] font-bold uppercase">
+                        AKUN MAHASISWA AKTIF SEUMUR HIDUP
+                      </span>
+                      {studentSession.activatedCode && (
+                        <span className="px-2.5 py-0.5 rounded-md bg-sky-100 text-sky-800 font-mono text-[11px] font-bold">
+                          Kode Terikat: {studentSession.activatedCode}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900 mt-1">
+                      {studentSession.fullName} —{' '}
+                      <span className="font-mono text-sky-700">NPM: {studentSession.npm}</span> (
+                      {studentSession.className})
+                    </h3>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Skor Tertinggi: <strong>{studentSession.highestScore}</strong> • Akurasi
+                      Terbaik: <strong>{studentSession.bestAccuracy}%</strong> • Modul Selesai:{' '}
+                      <strong>{(studentSession.completedModules || []).length}/35</strong> • Riwayat
+                      Kuis: <strong>{(studentSession.quizHistory || []).length} percobaan</strong>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => handleNavigateMenu('my_score')}
+                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition"
+                  >
+                    Dashboard & Riwayat Nilai
+                  </button>
+                  <button
+                    onClick={handleStudentLogout}
+                    className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition"
+                  >
+                    Logout Sesi
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-amber-300 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-800 font-mono text-[11px] font-bold uppercase">
+                    STATUS SESI: BELUM LOGIN MAHASISWA
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900 mt-1">
+                    Masuk atau Aktifkan Kode Akses Unik Mahasiswa ATLM
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Mahasiswa yang sudah pernah mengaktifkan akun cukup memasukkan NPM pada tab{' '}
+                    <strong>Login Mahasiswa Aktif</strong> tanpa perlu mengulang aktivasi.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setStudentAuthTab('login');
+                      setAuthError(null);
+                      setShowAuthModal('student');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition"
+                  >
+                    Login Mahasiswa Aktif
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStudentAuthTab('activate');
+                      setAuthError(null);
+                      setShowAuthModal('student');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition"
+                  >
+                    Aktivasi Kode Baru
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Quick Feature Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               <div
-                onClick={() => setActiveMenu('digital_calculator')}
+                onClick={() => handleNavigateMenu('digital_calculator')}
                 className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-sky-300 transition cursor-pointer flex flex-col justify-between"
               >
                 <div>
@@ -722,7 +892,7 @@ export default function App() {
               </div>
 
               <div
-                onClick={() => setActiveMenu('clinical_simulation')}
+                onClick={() => handleNavigateMenu('clinical_simulation')}
                 className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-emerald-300 transition cursor-pointer flex flex-col justify-between"
               >
                 <div>
@@ -743,7 +913,7 @@ export default function App() {
               </div>
 
               <div
-                onClick={() => setActiveMenu('medical_glossary')}
+                onClick={() => handleNavigateMenu('medical_glossary')}
                 className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-300 transition cursor-pointer flex flex-col justify-between"
               >
                 <div>
@@ -764,7 +934,7 @@ export default function App() {
               </div>
 
               <div
-                onClick={() => setActiveMenu('leaderboard')}
+                onClick={() => handleNavigateMenu('leaderboard')}
                 className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-amber-300 transition cursor-pointer flex flex-col justify-between"
               >
                 <div>
@@ -799,9 +969,9 @@ export default function App() {
             scrubColor={studentSession.scrubColor}
             hairColor={studentSession.hairColor}
             skinTone={studentSession.skinTone}
-            onStartQuiz={() => setActiveMenu('hematology_quiz')}
-            onOpenCalculator={() => setActiveMenu('digital_calculator')}
-            onOpenSimulation={() => setActiveMenu('clinical_simulation')}
+            onStartQuiz={() => handleNavigateMenu('hematology_quiz')}
+            onOpenCalculator={() => handleNavigateMenu('digital_calculator')}
+            onOpenSimulation={() => handleNavigateMenu('clinical_simulation')}
           />
         )}
 
@@ -824,7 +994,7 @@ export default function App() {
                 </p>
               </div>
               <button
-                onClick={() => setActiveMenu('explore_hospital')}
+                onClick={() => handleNavigateMenu('explore_hospital')}
                 className="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5"
               >
                 <Compass className="w-4 h-4" /> Jelajahi Lab dalam Mode 3D
@@ -1129,7 +1299,7 @@ export default function App() {
         {activeMenu === 'clinical_simulation' && <ClinicalSimulationView />}
 
         {/* ===================================================================
-            MENU 7: HEMATOLOGY QUIZ (30 ABCD QUESTIONS + POST-QUIZ REVIEW)
+            MENU 7: HEMATOLOGY QUIZ (50 A-E QUESTIONS + POST-QUIZ REVIEW)
            =================================================================== */}
         {activeMenu === 'hematology_quiz' && (
           <QuizizzEngine
@@ -1137,18 +1307,33 @@ export default function App() {
             studentName={studentSession.fullName}
             studentClass={studentSession.className}
             avatarGender={studentSession.avatarGender}
+            initialSummary={lastQuizSummary}
+            initialReview={lastQuizReview}
             onQuizCompleted={(summary, review) => {
               setLastQuizSummary(summary);
               setLastQuizReview(review);
+              const newAttempt: QuizHistoryEntry = {
+                id: Date.now(),
+                attemptUuid: `ATT-${Date.now()}`,
+                sessionCode: 'IKES-ATLM-LIVE',
+                totalQuestions: summary.totalQuestions,
+                correctCount: summary.correctCount,
+                wrongCount: summary.wrongCount,
+                accuracyPercent: summary.accuracyPercent,
+                score: summary.totalScore,
+                durationSeconds: summary.durationSec,
+                completedAt: new Date().toISOString(),
+              };
               setStudentSession((prev) => ({
                 ...prev,
                 highestScore: Math.max(prev.highestScore, summary.totalScore),
                 bestAccuracy: Math.max(prev.bestAccuracy, summary.accuracyPercent),
                 xp: prev.xp + summary.xpEarned,
+                quizHistory: [newAttempt, ...(prev.quizHistory || [])].slice(0, 20),
               }));
               fetchLeaderboard();
             }}
-            onViewLeaderboard={() => setActiveMenu('leaderboard')}
+            onViewLeaderboard={() => handleNavigateMenu('leaderboard')}
           />
         )}
 
@@ -1262,18 +1447,33 @@ export default function App() {
         )}
 
         {/* ===================================================================
-            MENU 11: MY SCORE & REVIEW HISTORY
+            MENU 11: MY SCORE & REVIEW HISTORY (STUDENT DASHBOARD)
            =================================================================== */}
         {activeMenu === 'my_score' && (
           <div className="space-y-6">
             <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 text-white shadow-xl">
-              <span className="text-xs font-mono uppercase tracking-wider text-sky-400">
-                REKOR KOMPETENSI PRIBADI MAHASISWA ATLM
-              </span>
-              <h2 className="text-2xl font-bold mt-1">
-                Profil Skor & Riwayat Evaluasi — {studentSession.fullName} (NPM:{' '}
-                {studentSession.npm})
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <span className="text-xs font-mono uppercase tracking-wider text-sky-400">
+                    DASHBOARD AKUN & REKOR KOMPETENSI MAHASISWA ATLM
+                  </span>
+                  <h2 className="text-2xl font-bold mt-1">
+                    {studentSession.fullName} (NPM: {studentSession.npm})
+                  </h2>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Kelas: {studentSession.className} • Status Aktivasi:{' '}
+                    <span className="text-emerald-400 font-bold">
+                      Aktif Seumur Hidup ({studentSession.activatedCode || studentSession.activatedWithCodeDisplay || 'Terverifikasi'})
+                    </span>
+                  </p>
+                </div>
+                <button
+                  onClick={handleStudentLogout}
+                  className="px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 text-xs font-semibold"
+                >
+                  Logout Sesi Mahasiswa
+                </button>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
                 <div className="p-4 rounded-xl bg-slate-800 border border-slate-700">
                   <p className="text-xs font-mono text-slate-400">SKOR TERTINGGI</p>
@@ -1305,12 +1505,12 @@ export default function App() {
             {lastQuizSummary && lastQuizReview.length > 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
                 <h3 className="text-lg font-bold text-slate-900">
-                  Ringkasan Pembahasan Percobaan Kuis Terakhir ({lastQuizSummary.correctCount}/{lastQuizSummary.totalQuestions}
-                  {' '}Benar — {lastQuizSummary.accuracyPercent}%)
+                  Ringkasan Pembahasan Percobaan Kuis Terakhir ({lastQuizSummary.correctCount}/
+                  {lastQuizSummary.totalQuestions} Benar — {lastQuizSummary.accuracyPercent}%)
                 </h3>
                 <button
-                  onClick={() => setActiveMenu('hematology_quiz')}
-                  className="px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-semibold"
+                  onClick={() => handleNavigateMenu('hematology_quiz')}
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold"
                 >
                   Buka Kembali Halaman Pembahasan Lengkap
                 </button>
@@ -1318,17 +1518,65 @@ export default function App() {
             ) : (
               <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
                 <p className="text-sm text-slate-600">
-                  Selesaikan 50 Soal Kuis Hematologi ATLM (A–E) untuk membuka analisis skor dan pembahasan
-                  lengkap 5 aspek laboratorium.
+                  Selesaikan 50 Soal Kuis Hematologi ATLM (A–E) untuk membuka analisis skor dan
+                  pembahasan lengkap 5 aspek laboratorium.
                 </p>
                 <button
-                  onClick={() => setActiveMenu('hematology_quiz')}
+                  onClick={() => handleNavigateMenu('hematology_quiz')}
                   className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold"
                 >
                   Mulai Kuis 50 Soal Sekarang
                 </button>
               </div>
             )}
+
+            {/* Quiz Attempt History Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-900">
+                  Riwayat Pengerjaan Hematology Quiz ({(studentSession.quizHistory || []).length}{' '}
+                  Percobaan Tersimpan)
+                </h3>
+              </div>
+              {(studentSession.quizHistory || []).length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-900 text-slate-300 font-mono uppercase">
+                        <th className="p-3">No</th>
+                        <th className="p-3">Waktu Selesai</th>
+                        <th className="p-3">Benar / Total</th>
+                        <th className="p-3">Akurasi</th>
+                        <th className="p-3">Skor Total</th>
+                        <th className="p-3">Durasi Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {(studentSession.quizHistory || []).map((att, idx) => (
+                        <tr key={att.attemptUuid || att.id || idx} className="hover:bg-slate-50">
+                          <td className="p-3 font-mono font-bold text-slate-700">#{idx + 1}</td>
+                          <td className="p-3 font-mono text-slate-600">
+                            {new Date(att.completedAt).toLocaleString('id-ID')}
+                          </td>
+                          <td className="p-3 font-mono font-semibold text-slate-900">
+                            {att.correctCount} / {att.totalQuestions}
+                          </td>
+                          <td className="p-3 font-mono font-bold text-emerald-600">
+                            {att.accuracyPercent}%
+                          </td>
+                          <td className="p-3 font-mono font-bold text-sky-700">{att.score}</td>
+                          <td className="p-3 font-mono text-slate-600">{att.durationSeconds} dtk</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Belum ada riwayat pengerjaan kuis yang tercatat untuk NPM {studentSession.npm}.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -1351,7 +1599,7 @@ export default function App() {
                 {
                   title: 'ATLM Lifetime Cadet',
                   desc: 'Mengaktifkan akses seumur hidup mahasiswa ATLM Institut Kesehatan Rajawali.',
-                  unlocked: true,
+                  unlocked: isStudentActivated,
                 },
                 {
                   title: 'Erythrocyte Index Master',
@@ -1522,7 +1770,7 @@ export default function App() {
                 Simpan Kustomisasi Avatar
               </button>
               <button
-                onClick={() => setActiveMenu('explore_hospital')}
+                onClick={() => handleNavigateMenu('explore_hospital')}
                 className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold"
               >
                 Lihat Avatar di Dunia 3D →
@@ -1723,13 +1971,13 @@ export default function App() {
                 <div>
                   <span className="text-[11px] font-mono font-bold uppercase text-sky-700">
                     {showAuthModal === 'student'
-                      ? 'SISTEM AKSES LIFETIME MAHASISWA ATLM'
+                      ? 'SISTEM AUTENTIKASI & AKTIVASI MAHASISWA ATLM'
                       : 'PORTAL DOSEN PENGAMPU IKES RAJAWALI'}
                   </span>
                   <h3 className="text-lg font-bold text-slate-900">
                     {showAuthModal === 'student'
-                      ? 'Aktivasi Sekali untuk Akses Seumur Hidup'
-                      : 'Login dr. Juwita Ninda Suherman, M.Kes'}
+                      ? 'Login & Aktivasi Akun Mahasiswa'
+                      : 'Autentikasi Dosen Pengampu'}
                   </h3>
                 </div>
               </div>
@@ -1737,6 +1985,7 @@ export default function App() {
                 onClick={() => {
                   setShowAuthModal(null);
                   setAuthError(null);
+                  setAuthSuccess(null);
                 }}
                 className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100"
               >
@@ -1746,8 +1995,43 @@ export default function App() {
 
             {showAuthModal === 'student' ? (
               <>
+                {isStudentActivated && (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3 text-xs">
+                    <div>
+                      <p className="font-bold text-emerald-900">
+                        Sesi Aktif: {studentSession.fullName} ({studentSession.npm})
+                      </p>
+                      <p className="text-emerald-700 font-mono text-[11px]">
+                        Kode Terikat: {studentSession.activatedCode || 'AKTIF-SEUMUR-HIDUP'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleStudentLogout}
+                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold shrink-0"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
                   <button
+                    type="button"
+                    onClick={() => {
+                      setStudentAuthTab('login');
+                      setAuthError(null);
+                    }}
+                    className={`py-2 rounded-lg transition ${
+                      studentAuthTab === 'login'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}
+                  >
+                    Login Mahasiswa Aktif
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
                       setStudentAuthTab('activate');
                       setAuthError(null);
@@ -1758,20 +2042,7 @@ export default function App() {
                         : 'text-slate-600'
                     }`}
                   >
-                    Aktivasi / Masuk NPM
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStudentAuthTab('recover');
-                      setAuthError(null);
-                    }}
-                    className={`py-2 rounded-lg transition ${
-                      studentAuthTab === 'recover'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600'
-                    }`}
-                  >
-                    Pulihkan Akses Lifetime
+                    Aktivasi Pertama Kali
                   </button>
                 </div>
 
@@ -1804,6 +2075,12 @@ export default function App() {
                       placeholder="Contoh: 24011001"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
                     />
+                    {studentAuthTab === 'login' && (
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Bagi mahasiswa yang sudah mengaktifkan akun sekali, cukup masukkan NPM Anda
+                        untuk masuk kembali tanpa perlu mengulang aktivasi.
+                      </p>
+                    )}
                   </div>
 
                   {studentAuthTab === 'activate' && (
@@ -1823,18 +2100,19 @@ export default function App() {
 
                       <div>
                         <label className="block font-bold uppercase text-slate-700 mb-1">
-                          Kode Akses Kelas (Hanya untuk Aktivasi Pertama)
+                          Kode Aktivasi Unik Mahasiswa (Dari Dosen)
                         </label>
                         <input
-                          type="password"
+                          type="text"
+                          required
                           value={formAccessCode}
-                          onChange={(e) => setFormAccessCode(e.target.value)}
-                          placeholder="Kode Akses dari Dosen"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
+                          onChange={(e) => setFormAccessCode(e.target.value.toUpperCase())}
+                          placeholder="Masukkan kode aktivasi unik dari Dosen"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono uppercase"
                         />
                         <p className="text-[11px] text-slate-500 mt-1">
-                          Tanpa registrasi email/password. Setelah NPM teraktivasi sekali, akses
-                          Anda bersifat permanen selamanya meskipun kode akses kelas diubah Dosen.
+                          1 kode aktivasi unik hanya berlaku untuk 1 mahasiswa (NPM) dan aktif
+                          permanen seumur hidup. Kode tidak dapat digunakan oleh NPM lain.
                         </p>
                       </div>
 
@@ -1886,8 +2164,8 @@ export default function App() {
                     className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow"
                   >
                     {studentAuthTab === 'activate'
-                      ? 'Aktifkan Akses Lifetime & Masuk'
-                      : 'Pulihkan Akses Lifetime dengan NPM'}
+                      ? 'Aktifkan Kode Unik & Masuk Permanen'
+                      : 'Masuk dengan NPM Terdaftar'}
                   </button>
                 </form>
               </>
@@ -1895,6 +2173,7 @@ export default function App() {
               <>
                 <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
                   <button
+                    type="button"
                     onClick={() => {
                       setLecturerTab('bootstrap');
                       setAuthError(null);
@@ -1908,6 +2187,7 @@ export default function App() {
                     Kode Akses Dosen
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setLecturerTab('credentials');
                       setAuthError(null);
@@ -1926,18 +2206,20 @@ export default function App() {
                   {lecturerTab === 'bootstrap' ? (
                     <div>
                       <label className="block font-bold uppercase text-slate-700 mb-1">
-                        Masukkan Kode Aktivasi Dosen Pengampu
+                        Kode Akses Rahasia Dosen Pengampu
                       </label>
                       <input
-                        type="text"
+                        type="password"
                         required
+                        autoComplete="off"
                         value={lecturerBootstrapCode}
                         onChange={(e) => setLecturerBootstrapCode(e.target.value)}
-                        placeholder="040186"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900"
+                        placeholder="Masukkan kode akses rahasia dosen"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-slate-900"
                       />
-                      <p className="text-[11px] text-sky-700 font-mono mt-1">
-                        Kode Aktivasi Dosen: <strong>040186</strong>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Validasi dilakukan secara tertutup di server menggunakan secret
+                        server-side dan sesi cookie HttpOnly.
                       </p>
                     </div>
                   ) : (
@@ -1951,7 +2233,7 @@ export default function App() {
                           required
                           value={lecturerUsername}
                           onChange={(e) => setLecturerUsername(e.target.value)}
-                          placeholder="dr.juwita"
+                          placeholder="Masukkan username dosen"
                           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
                         />
                       </div>
@@ -1964,7 +2246,7 @@ export default function App() {
                           required
                           value={lecturerPassword}
                           onChange={(e) => setLecturerPassword(e.target.value)}
-                          placeholder="Password pribadi dosen"
+                          placeholder="Masukkan password pribadi dosen"
                           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
                         />
                       </div>
@@ -1981,7 +2263,7 @@ export default function App() {
                     type="submit"
                     className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs"
                   >
-                    Masuk ke Dashboard Dosen (15 Menu)
+                    Verifikasi & Masuk ke Portal Dosen
                   </button>
                 </form>
 

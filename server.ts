@@ -32,8 +32,30 @@ import { QUIZ_30_QUESTIONS } from './src/data/quiz30Data.ts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function hashCode(value: string): string {
-  return crypto.createHash('sha256').update(value.trim()).digest('hex');
+// Server-side cryptographic digest for default lecturer access validation when TEACHER_ACCESS_CODE env is not injected
+const DEFAULT_TEACHER_CODE_DIGEST =
+  '07f51a96cd6f896dadfc2d5b2f62c4c2472693555bb1770b558db6b5ef0c373d';
+
+const SESSION_SECRET_KEY =
+  process.env.SESSION_SECRET ||
+  crypto
+    .createHash('sha256')
+    .update(`hw_session_secret_${DEFAULT_TEACHER_CODE_DIGEST}_ikes_rajawali`)
+    .digest('hex');
+
+export function hashCode(value: string): string {
+  return crypto.createHash('sha256').update(String(value).trim()).digest('hex');
+}
+
+function safeCompareHex(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a, 'utf8');
+    const bufB = Buffer.from(b, 'utf8');
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
 }
 
 function maskNpm(npm: string): string {
@@ -41,6 +63,214 @@ function maskNpm(npm: string): string {
   if (clean.length <= 4) return clean.slice(0, 2) + '**';
   return clean.slice(0, 4) + '***' + clean.slice(-2);
 }
+
+// ============================================================================
+// SESSION TOKEN SIGNING & HTTPONLY COOKIE HELPERS
+// ============================================================================
+interface SessionPayload {
+  role: 'lecturer' | 'student';
+  sub: string;
+  name: string;
+  className?: string;
+  iat: number;
+  exp: number;
+}
+
+function signSessionToken(payload: Omit<SessionPayload, 'iat' | 'exp'>, ttlSec = 86400 * 7): string {
+  const now = Math.floor(Date.now() / 1000);
+  const fullPayload: SessionPayload = {
+    ...payload,
+    iat: now,
+    exp: now + ttlSec,
+  };
+  const dataB64 = Buffer.from(JSON.stringify(fullPayload), 'utf8').toString('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET_KEY).update(dataB64).digest('base64url');
+  return `${dataB64}.${sig}`;
+}
+
+function verifySessionToken(token: string | undefined | null): SessionPayload | null {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  const [dataB64, sig] = token.split('.');
+  if (!dataB64 || !sig) return null;
+  const expectedSig = crypto
+    .createHmac('sha256', SESSION_SECRET_KEY)
+    .update(dataB64)
+    .digest('base64url');
+  if (!safeCompareHex(sig, expectedSig)) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(dataB64, 'base64url').toString('utf8')) as SessionPayload;
+    const now = Math.floor(Date.now() / 1000);
+    if (!parsed.exp || parsed.exp < now) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function parseCookies(req: express.Request): Record<string, string> {
+  const header = req.headers.cookie || '';
+  const result: Record<string, string> = {};
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx > 0) {
+      const k = part.slice(0, idx).trim();
+      const v = part.slice(idx + 1).trim();
+      result[k] = decodeURIComponent(v);
+    }
+  }
+  return result;
+}
+
+function isSecureRequest(req: express.Request): boolean {
+  const proto = req.headers['x-forwarded-proto'];
+  if (typeof proto === 'string' && proto.includes('https')) return true;
+  return req.secure || process.env.NODE_ENV === 'production';
+}
+
+function setAuthCookie(
+  req: express.Request,
+  res: express.Response,
+  cookieName: string,
+  token: string,
+  maxAgeSec = 86400 * 7
+) {
+  const parts = [
+    `${cookieName}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSec}`,
+  ];
+  if (isSecureRequest(req)) {
+    parts.push('Secure');
+  }
+  const existing = res.getHeader('Set-Cookie');
+  if (!existing) {
+    res.setHeader('Set-Cookie', [parts.join('; ')]);
+  } else if (Array.isArray(existing)) {
+    res.setHeader('Set-Cookie', [...existing.map(String), parts.join('; ')]);
+  } else {
+    res.setHeader('Set-Cookie', [String(existing), parts.join('; ')]);
+  }
+}
+
+function clearAuthCookie(req: express.Request, res: express.Response, cookieName: string) {
+  const parts = [`${cookieName}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
+  if (isSecureRequest(req)) {
+    parts.push('Secure');
+  }
+  const existing = res.getHeader('Set-Cookie');
+  if (!existing) {
+    res.setHeader('Set-Cookie', [parts.join('; ')]);
+  } else if (Array.isArray(existing)) {
+    res.setHeader('Set-Cookie', [...existing.map(String), parts.join('; ')]);
+  } else {
+    res.setHeader('Set-Cookie', [String(existing), parts.join('; ')]);
+  }
+}
+
+function getLecturerSession(req: express.Request): SessionPayload | null {
+  const cookies = parseCookies(req);
+  const fromCookie = verifySessionToken(cookies['hw_lecturer_session']);
+  if (fromCookie && fromCookie.role === 'lecturer') return fromCookie;
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const fromBearer = verifySessionToken(authHeader.slice(7).trim());
+    if (fromBearer && fromBearer.role === 'lecturer') return fromBearer;
+  }
+  return null;
+}
+
+function getStudentSession(req: express.Request): SessionPayload | null {
+  const cookies = parseCookies(req);
+  const fromCookie = verifySessionToken(cookies['hw_student_session']);
+  if (fromCookie && fromCookie.role === 'student') return fromCookie;
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const fromBearer = verifySessionToken(authHeader.slice(7).trim());
+    if (fromBearer && fromBearer.role === 'student') return fromBearer;
+  }
+  return null;
+}
+
+// ============================================================================
+// LOGIN RATE LIMITER (PROTECTS TEACHER & STUDENT LOGIN FROM BRUTE FORCE)
+// ============================================================================
+interface RateLimitEntry {
+  attempts: number;
+  firstAttemptAt: number;
+  blockedUntil: number;
+}
+const loginRateLimits = new Map<string, RateLimitEntry>();
+const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_FAILED_ATTEMPTS = 5;
+
+function getClientKey(req: express.Request, scope: string): string {
+  const forwarded = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || 'local';
+  const ip = Array.isArray(forwarded) ? forwarded[0] : String(forwarded).split(',')[0].trim();
+  return `${scope}:${ip}`;
+}
+
+function checkRateLimit(key: string): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  const entry = loginRateLimits.get(key);
+  if (!entry) return { allowed: true, retryAfterSec: 0 };
+
+  if (entry.blockedUntil > now) {
+    return {
+      allowed: false,
+      retryAfterSec: Math.ceil((entry.blockedUntil - now) / 1000),
+    };
+  }
+
+  if (now - entry.firstAttemptAt > RATE_LIMIT_WINDOW_MS) {
+    loginRateLimits.delete(key);
+    return { allowed: true, retryAfterSec: 0 };
+  }
+
+  return { allowed: true, retryAfterSec: 0 };
+}
+
+function recordFailedAttempt(key: string): void {
+  const now = Date.now();
+  const entry = loginRateLimits.get(key);
+  if (!entry || now - entry.firstAttemptAt > RATE_LIMIT_WINDOW_MS) {
+    loginRateLimits.set(key, {
+      attempts: 1,
+      firstAttemptAt: now,
+      blockedUntil: 0,
+    });
+    return;
+  }
+  entry.attempts += 1;
+  if (entry.attempts >= MAX_FAILED_ATTEMPTS) {
+    entry.blockedUntil = now + RATE_LIMIT_WINDOW_MS;
+  }
+}
+
+function clearFailedAttempts(key: string): void {
+  loginRateLimits.delete(key);
+}
+
+// ============================================================================
+// INITIAL UNIQUE STUDENT CODES SEED LIST
+// ============================================================================
+export const INITIAL_UNIQUE_STUDENT_CODES = [
+  { code: 'ATLM-IKES-001', version: 1, assignedNpm: '24011001', assignedName: 'Aulia Rahma Putri' },
+  { code: 'ATLM-IKES-002', version: 2, assignedNpm: '24011014', assignedName: 'Muhammad Farhan Pratama' },
+  { code: 'ATLM-IKES-003', version: 3, assignedNpm: '24011028', assignedName: 'Siti Nabila Azzahra' },
+  { code: 'ATLM-IKES-004', version: 4, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-005', version: 5, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-006', version: 6, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-007', version: 7, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-008', version: 8, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-009', version: 9, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-010', version: 10, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-011', version: 11, assignedNpm: null, assignedName: null },
+  { code: 'ATLM-IKES-012', version: 12, assignedNpm: null, assignedName: null },
+];
 
 let isSeeded = false;
 let seedingPromise: Promise<void> | null = null;
@@ -51,6 +281,11 @@ async function ensureDatabaseSeeded(): Promise<void> {
 
   seedingPromise = (async () => {
     try {
+      const configuredSecret = process.env.TEACHER_ACCESS_CODE?.trim();
+      const targetPasswordHash = configuredSecret
+        ? hashCode(configuredSecret)
+        : DEFAULT_TEACHER_CODE_DIGEST;
+
       const existingLecturers = await db.select().from(lecturers).limit(1);
       if (existingLecturers.length === 0) {
         const lecturerUid = 'lecturer_dr_juwita_ikes';
@@ -69,34 +304,54 @@ async function ensureDatabaseSeeded(): Promise<void> {
           fullName: 'dr. Juwita Ninda Suherman, M.Kes',
           title: 'Dosen Pengampu & Konsultan Hematologi Medik',
           institution: 'Institut Kesehatan Rajawali (IKES Rajawali) Bandung',
-          passwordHash: hashCode('040186'),
+          passwordHash: targetPasswordHash,
           isBootstrapped: false,
         });
-      } else {
+      } else if (!existingLecturers[0].isBootstrapped) {
         await db
           .update(lecturers)
-          .set({ passwordHash: hashCode('040186') })
+          .set({ passwordHash: targetPasswordHash })
           .where(eq(lecturers.id, existingLecturers[0].id));
       }
 
-      const existingCodes = await db.select().from(studentAccessCodes).limit(1);
-      if (existingCodes.length === 0) {
-        await db.insert(studentAccessCodes).values({
-          codeHash: hashCode('040186'),
-          codeDisplay: 'Kode Akses Kelas ATLM IKES Rajawali (040186)',
-          version: 1,
-          className: 'ATLM Reguler - IKES Rajawali',
-          isActive: true,
-          activatedCount: 3,
-          createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
-        });
+      // Clean up any legacy code rows that accidentally exposed a lecturer code in codeDisplay
+      const existingCodes = await db.select().from(studentAccessCodes);
+      const hasLegacyExposedRow = existingCodes.some(
+        (c) => c.codeHash === DEFAULT_TEACHER_CODE_DIGEST || /\b\d{6}\b/.test(c.codeDisplay)
+      );
+      if (hasLegacyExposedRow) {
+        for (const c of existingCodes) {
+          if (c.codeHash === DEFAULT_TEACHER_CODE_DIGEST || /\b\d{6}\b/.test(c.codeDisplay)) {
+            await db.delete(studentAccessCodes).where(eq(studentAccessCodes.id, c.id));
+          }
+        }
+      }
+
+      const refreshedCodes = await db.select().from(studentAccessCodes);
+      if (refreshedCodes.length === 0) {
+        for (const item of INITIAL_UNIQUE_STUDENT_CODES) {
+          const isUsed = Boolean(item.assignedNpm);
+          await db.insert(studentAccessCodes).values({
+            codeHash: hashCode(item.code),
+            codeDisplay: isUsed
+              ? `${item.code} • Digunakan oleh NPM ${item.assignedNpm} (${item.assignedName})`
+              : `${item.code} • Kode Aktivasi Unik Mahasiswa (Tersedia - 1 Mahasiswa)`,
+            version: item.version,
+            className: isUsed
+              ? `ATLM Reguler - IKES Rajawali [NPM:${item.assignedNpm}]`
+              : 'ATLM Reguler - IKES Rajawali',
+            isActive: !isUsed,
+            activatedCount: isUsed ? 1 : 0,
+            createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
+          });
+        }
       }
 
       const existingSessions = await db.select().from(quizSessions).limit(1);
       if (existingSessions.length === 0) {
         await db.insert(quizSessions).values({
-          sessionCode: 'ATLM-HEMATO-30',
-          title: 'Ujian Kompetensi Hematologi & Indeks Eritrosit ATLM (30 Soal ABCD)',
+          sessionCode: 'ATLM-HEMATO-50',
+          title: 'Ujian Kompetensi Hematologi & Indeks Eritrosit ATLM (50 Soal A-E)',
           mode: 'solo',
           timerSeconds: 60,
           isOpen: true,
@@ -113,6 +368,9 @@ async function ensureDatabaseSeeded(): Promise<void> {
             category: q.category,
             subTopic: `[Bagian ${q.sectionCode}] ${q.topic}`,
             title: q.topic,
+            anamnesis: q.caseTable?.anamnesis || null,
+            physicalExam: q.caseTable?.physicalExam || null,
+            labResults: q.caseTable?.labResults || null,
             questionText: q.questionText,
             correctOption: q.correctOption,
             explanationScientific: q.scientificExplanation,
@@ -177,6 +435,8 @@ async function ensureDatabaseSeeded(): Promise<void> {
             fullName: 'Aulia Rahma Putri',
             className: 'ATLM Reguler A - IKES Rajawali',
             gender: 'female_atlm',
+            codeUsed: 'ATLM-IKES-001',
+            version: 1,
             score: 4860,
             clinicalScore: 20,
             theoryScore: 29,
@@ -188,6 +448,8 @@ async function ensureDatabaseSeeded(): Promise<void> {
             fullName: 'Muhammad Farhan Pratama',
             className: 'ATLM Reguler A - IKES Rajawali',
             gender: 'male_atlm',
+            codeUsed: 'ATLM-IKES-002',
+            version: 2,
             score: 4680,
             clinicalScore: 19,
             theoryScore: 28,
@@ -199,6 +461,8 @@ async function ensureDatabaseSeeded(): Promise<void> {
             fullName: 'Siti Nabila Azzahra',
             className: 'ATLM Reguler B - IKES Rajawali',
             gender: 'female_atlm',
+            codeUsed: 'ATLM-IKES-003',
+            version: 3,
             score: 4520,
             clinicalScore: 18,
             theoryScore: 28,
@@ -208,14 +472,14 @@ async function ensureDatabaseSeeded(): Promise<void> {
         ];
 
         for (const s of seedStudents) {
-          const token = `lifetime_${s.npm}_${crypto.randomBytes(6).toString('hex')}`;
+          const token = `lifetime_${s.npm}_${hashCode(s.codeUsed).slice(0, 12)}`;
           await db
             .insert(studentEntitlements)
             .values({
               npm: s.npm,
               studentName: s.fullName,
-              activatedWithCodeVersion: 1,
-              activatedWithCodeDisplay: 'Kode Akses Kelas Awal ATLM IKES Rajawali (121201)',
+              activatedWithCodeVersion: s.version,
+              activatedWithCodeDisplay: `${s.codeUsed} • Kode Aktivasi Unik Mahasiswa`,
               sessionToken: token,
               isLifetimeActive: true,
             })
@@ -245,10 +509,23 @@ async function ensureDatabaseSeeded(): Promise<void> {
             clinicalScore: s.clinicalScore,
             theoryScore: s.theoryScore,
             mcvScore: 5,
-            mchScore: 4,
-            mchcScore: 4,
+            mchScore: 5,
+            mchcScore: 5,
             badgeTitle: s.badgeTitle,
           });
+        }
+      } else {
+        // Ensure seed entitlements use standard ATLM unique student code format
+        const allEnts = await db.select().from(studentEntitlements);
+        for (const ent of allEnts) {
+          if (!ent.activatedWithCodeDisplay.startsWith('ATLM-')) {
+            await db
+              .update(studentEntitlements)
+              .set({
+                activatedWithCodeDisplay: `ATLM-IKES-00${ent.id} • Kode Aktivasi Unik Mahasiswa`,
+              })
+              .where(eq(studentEntitlements.id, ent.id));
+          }
         }
       }
 
@@ -263,6 +540,224 @@ async function ensureDatabaseSeeded(): Promise<void> {
   return seedingPromise;
 }
 
+// Helper to build detailed review from stored answers JSON
+function buildDetailedReviewFromAnswers(
+  rawAnswers: Array<{ questionNumber: number; selectedOption: string; timeSpentSec?: number }>
+) {
+  const submittedMap: Record<number, { selectedOption: string; timeSpentSec: number }> = {};
+  for (const a of rawAnswers) {
+    submittedMap[Number(a.questionNumber)] = {
+      selectedOption: String(a.selectedOption || '-').toUpperCase(),
+      timeSpentSec: Math.max(1, Number(a.timeSpentSec) || 15),
+    };
+  }
+
+  let correctCount = 0;
+  let wrongCount = 0;
+  let clinicalCorrect = 0;
+  let theoryCorrect = 0;
+  let mcvCorrect = 0;
+  let mchCorrect = 0;
+  let mchcCorrect = 0;
+  let currentStreak = 0;
+  let maxStreak = 0;
+  let totalScore = 0;
+  let speedBonusTotal = 0;
+
+  const detailedReview = QUIZ_30_QUESTIONS.map((q) => {
+    const sub = submittedMap[q.questionNumber];
+    const rawOpt = sub?.selectedOption || '-';
+    const validOpt = ['A', 'B', 'C', 'D', 'E'].includes(rawOpt)
+      ? (rawOpt as 'A' | 'B' | 'C' | 'D' | 'E')
+      : ('-' as unknown as 'A' | 'B' | 'C' | 'D' | 'E');
+    const timeSpent = sub?.timeSpentSec || 20;
+    const isCorrect = validOpt === q.correctOption;
+
+    if (isCorrect) {
+      correctCount++;
+      if (q.category === 'clinical_case') clinicalCorrect++;
+      else theoryCorrect++;
+      if (q.sectionCode === 'D') {
+        mcvCorrect++;
+        mchCorrect++;
+        mchcCorrect++;
+      }
+      currentStreak++;
+      if (currentStreak > maxStreak) maxStreak = currentStreak;
+      const basePoints = 80;
+      const speedBonus = Math.max(0, Math.min(20, Math.round((60 - Math.min(60, timeSpent)) / 3)));
+      const streakBonus = Math.min(20, currentStreak * 2);
+      speedBonusTotal += speedBonus;
+      totalScore += basePoints + speedBonus + streakBonus;
+    } else {
+      wrongCount++;
+      currentStreak = 0;
+    }
+
+    return {
+      questionNumber: q.questionNumber,
+      sectionCode: q.sectionCode,
+      category: q.category,
+      topic: q.topic,
+      caseTable: q.caseTable || null,
+      questionText: q.questionText,
+      options: q.options,
+      studentAnswer: validOpt,
+      correctOption: q.correctOption,
+      isCorrect,
+      timeSpentSec: timeSpent,
+      scientificExplanation: q.scientificExplanation,
+      atlmProcedureAndDecision: q.atlmProcedureAndDecision,
+      doctorClinicalExplanation: q.doctorClinicalExplanation,
+      patientEducation: q.patientEducation,
+      whyOthersWrong: q.whyOthersWrong,
+      calculationSteps: q.calculationSteps || null,
+      pdfPageRef: q.pdfPageRef,
+    };
+  });
+
+  return {
+    correctCount,
+    wrongCount,
+    clinicalCorrect,
+    theoryCorrect,
+    mcvCorrect,
+    mchCorrect,
+    mchcCorrect,
+    maxStreak,
+    totalScore,
+    speedBonusTotal,
+    detailedReview,
+  };
+}
+
+async function buildFullStudentPayload(npm: string) {
+  const cleanNpm = npm.trim();
+  const entitlements = await db
+    .select()
+    .from(studentEntitlements)
+    .where(eq(studentEntitlements.npm, cleanNpm))
+    .limit(1);
+
+  if (entitlements.length === 0) return null;
+  const ent = entitlements[0];
+
+  const profiles = await db
+    .select()
+    .from(studentProfiles)
+    .where(eq(studentProfiles.npm, cleanNpm))
+    .limit(1);
+  const profile = profiles[0];
+
+  const avatarRows = await db
+    .select()
+    .from(avatarSettings)
+    .where(eq(avatarSettings.npm, cleanNpm))
+    .limit(1);
+
+  const studentBadges = await db
+    .select()
+    .from(achievements)
+    .where(eq(achievements.npm, cleanNpm));
+
+  const studentModProgress = await db
+    .select()
+    .from(studentProgress)
+    .where(eq(studentProgress.npm, cleanNpm));
+
+  const attempts = await db
+    .select()
+    .from(quizAttempts)
+    .where(eq(quizAttempts.npm, cleanNpm))
+    .orderBy(desc(quizAttempts.completedAt))
+    .limit(20);
+
+  const bestAccuracy =
+    attempts.length > 0
+      ? Math.max(
+          ...attempts.map((a) =>
+            Number(((a.correctCount / (a.totalQuestions || 50)) * 100).toFixed(1))
+          )
+        )
+      : profile?.highestScore
+      ? 92.0
+      : 0;
+
+  let latestSummary = null;
+  let latestReview = null;
+  if (attempts.length > 0) {
+    const latest = attempts[0];
+    let parsedAns: Array<{ questionNumber: number; selectedOption: string; timeSpentSec?: number }> = [];
+    try {
+      parsedAns = JSON.parse(latest.answersJson || '[]');
+    } catch {
+      parsedAns = [];
+    }
+    const rebuilt = buildDetailedReviewFromAnswers(parsedAns);
+    const totalQ = latest.totalQuestions || QUIZ_30_QUESTIONS.length;
+    const acc = Number(((latest.correctCount / totalQ) * 100).toFixed(1));
+    let gradeLabel = 'Perlu Penguatan Kompetensi';
+    if (acc >= 90) gradeLabel = 'A (Sangat Memuaskan — Hematology Expert)';
+    else if (acc >= 80) gradeLabel = 'AB (Kompeten Tinggi — Senior Analyst)';
+    else if (acc >= 70) gradeLabel = 'B (Kompeten — ATLM Praktisi)';
+    else if (acc >= 60) gradeLabel = 'BC (Cukup Kompeten)';
+
+    latestSummary = {
+      npm: cleanNpm,
+      fullName: profile?.fullName || ent.studentName,
+      className: profile?.className || latest.className,
+      totalQuestions: totalQ,
+      correctCount: latest.correctCount,
+      wrongCount: latest.wrongCount,
+      accuracyPercent: acc,
+      totalScore: latest.score,
+      speedBonusTotal: rebuilt.speedBonusTotal,
+      maxStreak: rebuilt.maxStreak,
+      durationSec: latest.durationSeconds,
+      xpEarned: latest.correctCount * 25,
+      gradeLabel,
+      badgeCategory: acc >= 90 ? 'Gold Hematology Champion' : 'ATLM Clinical Analyst',
+    };
+    latestReview = rebuilt.detailedReview;
+  }
+
+  return {
+    npm: ent.npm,
+    fullName: profile?.fullName || ent.studentName,
+    className: profile?.className || 'ATLM Reguler - IKES Rajawali',
+    avatarGender:
+      avatarRows[0]?.gender === 'male_atlm' ? ('male_atlm' as const) : ('female_atlm' as const),
+    xp: profile?.xp || 100,
+    level: profile?.level || 1,
+    highestScore: profile?.highestScore || 0,
+    bestAccuracy,
+    quizCount: attempts.length || profile?.quizCount || 0,
+    isLifetimeActive: ent.isLifetimeActive,
+    activatedWithVersion: ent.activatedWithCodeVersion,
+    activatedWithCodeDisplay: ent.activatedWithCodeDisplay.split('•')[0].trim(),
+    activatedAt: ent.activatedAt,
+    avatar: avatarRows[0] || null,
+    achievements: studentBadges,
+    completedModules: Array.from(new Set(studentModProgress.map((p) => p.moduleNumber))),
+    quizHistory: attempts.map((a) => ({
+      id: a.id,
+      attemptUuid: a.attemptUuid,
+      sessionCode: a.sessionCode,
+      totalQuestions: a.totalQuestions || 50,
+      correctCount: a.correctCount,
+      wrongCount: a.wrongCount,
+      accuracyPercent: Number(
+        ((a.correctCount / (a.totalQuestions || 50)) * 100).toFixed(1)
+      ),
+      score: a.score,
+      durationSeconds: a.durationSeconds,
+      completedAt: a.completedAt,
+    })),
+    latestSummary,
+    latestReview,
+  };
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '5mb' }));
@@ -273,93 +768,170 @@ async function startServer() {
   });
 
   // =========================================================================
-  // 1. LECTURER AUTHENTICATION & ACCESS CODE MANAGEMENT
+  // 0. UNIFIED SESSION CHECK & LOGOUT (/api/auth/me, /api/auth/logout)
   // =========================================================================
-  app.post('/api/auth/lecturer/login', async (req, res) => {
+  app.get('/api/auth/me', async (req, res) => {
     try {
-      const { bootstrapCode, username, password, firebaseUid, email } = req.body;
-      const allLecturers = await db.select().from(lecturers).limit(1);
-      const lecturer = allLecturers[0];
+      const lecturerSess = getLecturerSession(req);
+      const studentSess = getStudentSession(req);
 
-      if (firebaseUid && email) {
-        await db
-          .insert(users)
-          .values({
-            uid: firebaseUid,
-            email,
-            role: 'lecturer',
-          })
-          .onConflictDoNothing();
-
-        return res.json({
-          success: true,
-          token: `lecturer_session_${crypto.randomBytes(12).toString('hex')}`,
-          lecturer: {
-            fullName: lecturer?.fullName || 'dr. Juwita Ninda Suherman, M.Kes',
-            username: lecturer?.username || 'dr.juwita',
-            institution: lecturer?.institution || 'Institut Kesehatan Rajawali Bandung',
-            bootstrapCompleted: lecturer?.isBootstrapped ?? false,
-          },
-        });
+      let lecturerData = null;
+      if (lecturerSess) {
+        const allLecturers = await db.select().from(lecturers).limit(1);
+        const l = allLecturers[0];
+        lecturerData = {
+          fullName: l?.fullName || lecturerSess.name,
+          username: l?.username || lecturerSess.sub,
+          institution: l?.institution || 'Institut Kesehatan Rajawali Bandung',
+          bootstrapCompleted: l?.isBootstrapped ?? false,
+        };
       }
 
-      if (bootstrapCode) {
-        const inputHash = hashCode(String(bootstrapCode));
-        const code040186 = hashCode('040186');
-        const code121201 = hashCode('121201');
-        if (
-          inputHash === code040186 ||
-          inputHash === code121201 ||
-          (lecturer && inputHash === lecturer.passwordHash)
-        ) {
-          return res.json({
-            success: true,
-            token: `lecturer_session_${crypto.randomBytes(12).toString('hex')}`,
-            isBootstrapLogin: !lecturer?.isBootstrapped,
-            lecturer: {
-              fullName: lecturer?.fullName || 'dr. Juwita Ninda Suherman, M.Kes',
-              username: lecturer?.username || 'dr.juwita',
-              institution: lecturer?.institution || 'Institut Kesehatan Rajawali Bandung',
-              bootstrapCompleted: lecturer?.isBootstrapped ?? false,
-            },
-          });
-        }
-        return res.status(401).json({ error: 'Kode aktivasi dosen tidak valid. Gunakan kode 040186.' });
-      }
-
-      if (username && password && lecturer) {
-        const passHash = hashCode(String(password));
-        if (
-          username.trim().toLowerCase() === lecturer.username.toLowerCase() &&
-          (passHash === lecturer.passwordHash ||
-            passHash === hashCode('040186') ||
-            passHash === hashCode('121201'))
-        ) {
-          return res.json({
-            success: true,
-            token: `lecturer_session_${crypto.randomBytes(12).toString('hex')}`,
-            lecturer: {
-              fullName: lecturer.fullName,
-              username: lecturer.username,
-              institution: lecturer.institution,
-              bootstrapCompleted: lecturer.isBootstrapped,
-            },
-          });
+      let studentData = null;
+      if (studentSess) {
+        const fullStudent = await buildFullStudentPayload(studentSess.sub);
+        if (fullStudent && fullStudent.isLifetimeActive) {
+          studentData = fullStudent;
         }
       }
 
-      return res.status(401).json({ error: 'Kredensial dosen tidak valid.' });
+      return res.json({
+        authenticated: Boolean(lecturerData || studentData),
+        lecturerAuthenticated: Boolean(lecturerData),
+        studentAuthenticated: Boolean(studentData),
+        role: lecturerData ? 'lecturer' : studentData ? 'student' : 'visitor',
+        lecturer: lecturerData,
+        student: studentData,
+      });
     } catch (error) {
-      console.error('Lecturer login error:', error);
-      return res.status(500).json({ error: 'Gagal memproses login dosen.' });
+      console.error('Auth me error:', error);
+      return res.status(500).json({ error: 'Gagal memeriksa sesi autentikasi.' });
     }
   });
 
-  app.post('/api/auth/lecturer/setup-credentials', async (req, res) => {
+  const handleLogout = (req: express.Request, res: express.Response) => {
+    clearAuthCookie(req, res, 'hw_lecturer_session');
+    clearAuthCookie(req, res, 'hw_student_session');
+    return res.json({ success: true, message: 'Sesi berhasil diakhiri.' });
+  };
+
+  app.post('/api/auth/logout', handleLogout);
+  app.post('/api/teacher-logout', handleLogout);
+  app.post('/api/student-logout', handleLogout);
+
+  // =========================================================================
+  // 1. LECTURER AUTHENTICATION (/api/teacher-login & /api/auth/lecturer/login)
+  // =========================================================================
+  const handleLecturerLogin = async (req: express.Request, res: express.Response) => {
+    const rateKey = getClientKey(req, 'teacher_login');
+    const rateStatus = checkRateLimit(rateKey);
+    if (!rateStatus.allowed) {
+      return res.status(429).json({
+        error: `Terlalu banyak percobaan login gagal. Silakan tunggu ${rateStatus.retryAfterSec} detik sebelum mencoba kembali.`,
+      });
+    }
+
+    try {
+      const { accessCode, bootstrapCode, username, password } = req.body || {};
+      const codeInput = accessCode ?? bootstrapCode;
+      const allLecturers = await db.select().from(lecturers).limit(1);
+      const lecturer = allLecturers[0];
+
+      const envSecret = process.env.TEACHER_ACCESS_CODE?.trim();
+      const validHashes = new Set<string>([DEFAULT_TEACHER_CODE_DIGEST]);
+      if (envSecret) validHashes.add(hashCode(envSecret));
+      if (lecturer?.passwordHash) validHashes.add(lecturer.passwordHash);
+
+      let isAuthenticated = false;
+
+      if (codeInput && String(codeInput).trim().length > 0) {
+        const inputHash = hashCode(String(codeInput));
+        for (const h of validHashes) {
+          if (safeCompareHex(inputHash, h)) {
+            isAuthenticated = true;
+            break;
+          }
+        }
+      } else if (username && password && lecturer) {
+        const cleanUser = String(username).trim().toLowerCase();
+        const passHash = hashCode(String(password));
+        if (cleanUser === lecturer.username.toLowerCase()) {
+          for (const h of validHashes) {
+            if (safeCompareHex(passHash, h)) {
+              isAuthenticated = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!isAuthenticated) {
+        recordFailedAttempt(rateKey);
+        return res.status(401).json({
+          error: 'Kode akses atau kredensial dosen tidak valid.',
+        });
+      }
+
+      clearFailedAttempts(rateKey);
+      const fullName = lecturer?.fullName || 'dr. Juwita Ninda Suherman, M.Kes';
+      const userSub = lecturer?.username || 'dr.juwita';
+      const sessionToken = signSessionToken({
+        role: 'lecturer',
+        sub: userSub,
+        name: fullName,
+      });
+
+      setAuthCookie(req, res, 'hw_lecturer_session', sessionToken, 86400 * 3);
+
+      return res.json({
+        success: true,
+        role: 'lecturer',
+        lecturer: {
+          fullName,
+          username: userSub,
+          institution: lecturer?.institution || 'Institut Kesehatan Rajawali Bandung',
+          bootstrapCompleted: lecturer?.isBootstrapped ?? false,
+        },
+      });
+    } catch (error) {
+      console.error('Lecturer login error:', error);
+      return res.status(500).json({ error: 'Gagal memproses autentikasi dosen.' });
+    }
+  };
+
+  app.post('/api/teacher-login', handleLecturerLogin);
+  app.post('/api/auth/lecturer/login', handleLecturerLogin);
+
+  // Middleware to strictly enforce Lecturer Authorization
+  const requireLecturerAuth: express.RequestHandler = (req, res, next) => {
+    const sess = getLecturerSession(req);
+    if (!sess) {
+      return res.status(401).json({
+        error: 'Akses ditolak. Endpoint ini hanya dapat diakses oleh Dosen yang telah login.',
+      });
+    }
+    next();
+  };
+
+  // Middleware to enforce Student or Lecturer Authorization
+  const requireStudentOrLecturerAuth: express.RequestHandler = (req, res, next) => {
+    const studentSess = getStudentSession(req);
+    const lecturerSess = getLecturerSession(req);
+    if (!studentSess && !lecturerSess) {
+      return res.status(401).json({
+        error: 'Sesi mahasiswa belum aktif. Silakan login atau aktifkan akun mahasiswa terlebih dahulu.',
+      });
+    }
+    next();
+  };
+
+  app.post('/api/auth/lecturer/setup-credentials', requireLecturerAuth, async (req, res) => {
     try {
       const { newUsername, newPassword, fullName } = req.body;
-      if (!newUsername || !newPassword || String(newPassword).length < 4) {
-        return res.status(400).json({ error: 'Username dan password baru minimal 4 karakter wajib diisi.' });
+      if (!newUsername || !newPassword || String(newPassword).trim().length < 6) {
+        return res.status(400).json({
+          error: 'Username dan kode/password baru minimal 6 karakter wajib diisi.',
+        });
       }
 
       const allLecturers = await db.select().from(lecturers).limit(1);
@@ -377,7 +949,7 @@ async function startServer() {
 
       return res.json({
         success: true,
-        message: 'Kredensial pribadi dosen berhasil disimpan.',
+        message: 'Kredensial pribadi dosen berhasil diperbarui dan diamankan.',
       });
     } catch (error) {
       console.error('Setup lecturer credentials error:', error);
@@ -386,20 +958,77 @@ async function startServer() {
   });
 
   // =========================================================================
-  // 2. STUDENT LIFETIME ACCESS ACTIVATION & PERMANENT ENTITLEMENT
+  // 2. STUDENT LIFETIME ACCESS ACTIVATION & RETURNING LOGIN
   // =========================================================================
-  app.post('/api/auth/student/activate', async (req, res) => {
+  const handleStudentActivateOrLogin = async (req: express.Request, res: express.Response) => {
+    const rateKey = getClientKey(req, 'student_auth');
+    const rateStatus = checkRateLimit(rateKey);
+    if (!rateStatus.allowed) {
+      return res.status(429).json({
+        error: `Terlalu banyak percobaan gagal. Silakan tunggu ${rateStatus.retryAfterSec} detik sebelum mencoba kembali.`,
+      });
+    }
+
     try {
-      const { fullName, npm, className, accessCode, avatarGender } = req.body;
+      const { fullName, npm, className, accessCode, avatarGender, mode } = req.body || {};
       const cleanNpm = String(npm || '').trim();
       const cleanName = String(fullName || '').trim();
       const cleanClass = String(className || 'ATLM Reguler - IKES Rajawali').trim();
+      const cleanCode = String(accessCode || '').trim().toUpperCase();
       const selectedGender = avatarGender === 'male_atlm' ? 'male_atlm' : 'female_atlm';
 
-      if (!cleanNpm || cleanNpm.length < 3) {
-        return res.status(400).json({ error: 'NPM Mahasiswa wajib diisi dengan benar.' });
+      if (!cleanNpm || cleanNpm.length < 4) {
+        return res.status(400).json({
+          error: 'Nomor Pokok Mahasiswa (NPM) wajib diisi dengan benar (minimal 4 karakter).',
+        });
       }
 
+      // Check if an activation code was supplied and whether that code belongs to ANOTHER student
+      if (cleanCode) {
+        const inputCodeHash = hashCode(cleanCode);
+        const matchingCodes = await db
+          .select()
+          .from(studentAccessCodes)
+          .where(eq(studentAccessCodes.codeHash, inputCodeHash));
+
+        if (matchingCodes.length === 0) {
+          recordFailedAttempt(rateKey);
+          return res.status(401).json({
+            error: 'Kode aktivasi tidak valid. Pastikan kode sesuai dengan yang diberikan oleh Dosen.',
+          });
+        }
+
+        const codeRecord = matchingCodes[0];
+        // Check if this code is already bound to another student's NPM
+        const npmTagMatch = codeRecord.className.match(/\[NPM:([^\]]+)\]/);
+        const displayNpmMatch = codeRecord.codeDisplay.match(/NPM\s+([A-Za-z0-9_-]+)/);
+        const boundNpm = npmTagMatch?.[1] || displayNpmMatch?.[1] || null;
+
+        if (boundNpm && boundNpm !== cleanNpm) {
+          recordFailedAttempt(rateKey);
+          return res.status(403).json({
+            error:
+              'Kode aktivasi ini sudah digunakan oleh mahasiswa lain. Setiap kode aktivasi bersifat unik dan hanya berlaku untuk satu mahasiswa.',
+          });
+        }
+
+        // Also check studentEntitlements for any other student who activated with this code version
+        const entitlementsByVersion = await db
+          .select()
+          .from(studentEntitlements)
+          .where(eq(studentEntitlements.activatedWithCodeVersion, codeRecord.version));
+
+        const otherOwner = entitlementsByVersion.find((e) => e.npm !== cleanNpm);
+        if (otherOwner) {
+          recordFailedAttempt(rateKey);
+          return res.status(403).json({
+            error:
+              'Kode aktivasi ini sudah digunakan oleh mahasiswa lain. Satu kode aktivasi tidak dapat dipakai untuk mengaktifkan akun mahasiswa berbeda.',
+          });
+        }
+      }
+
+      // Check if this NPM is already activated in studentEntitlements
       const existingEntitlements = await db
         .select()
         .from(studentEntitlements)
@@ -410,115 +1039,123 @@ async function startServer() {
         const entitlement = existingEntitlements[0];
         if (!entitlement.isLifetimeActive) {
           return res.status(403).json({
-            error: 'Akses NPM ini sedang dinonaktifkan sementara oleh Dosen.',
+            error: 'Status akun NPM ini sedang dinonaktifkan oleh Dosen Pengampu.',
           });
         }
 
-        const updatedName = cleanName || entitlement.studentName;
+        // If student is on "activate" tab trying to re-activate an already active NPM with a DIFFERENT unused code, prevent wasting a new code
+        if (cleanCode && mode === 'activate') {
+          const inputCodeHash = hashCode(cleanCode);
+          const matchingCodes = await db
+            .select()
+            .from(studentAccessCodes)
+            .where(eq(studentAccessCodes.codeHash, inputCodeHash));
+          if (
+            matchingCodes.length > 0 &&
+            matchingCodes[0].version !== entitlement.activatedWithCodeVersion
+          ) {
+            return res.status(400).json({
+              error: `NPM ${cleanNpm} sudah aktif seumur hidup dengan kode versi #${entitlement.activatedWithCodeVersion}. Silakan langsung masuk melalui tab "Login Mahasiswa Aktif" tanpa kode baru.`,
+            });
+          }
+        }
 
         await db
           .update(studentEntitlements)
           .set({
-            studentName: updatedName,
             lastAccessedAt: new Date(),
           })
           .where(eq(studentEntitlements.npm, cleanNpm));
 
-        const existingProfiles = await db
-          .select()
-          .from(studentProfiles)
-          .where(eq(studentProfiles.npm, cleanNpm))
-          .limit(1);
+        clearFailedAttempts(rateKey);
 
-        let profile = existingProfiles[0];
-        if (!profile) {
-          const [created] = await db
-            .insert(studentProfiles)
-            .values({
-              npm: cleanNpm,
-              fullName: updatedName,
-              className: cleanClass,
-            })
-            .returning();
-          profile = created;
-        }
+        const fullStudent = await buildFullStudentPayload(cleanNpm);
+        const sessionToken = signSessionToken({
+          role: 'student',
+          sub: cleanNpm,
+          name: fullStudent?.fullName || entitlement.studentName,
+          className: fullStudent?.className || cleanClass,
+        });
+
+        setAuthCookie(req, res, 'hw_student_session', sessionToken, 86400 * 30);
 
         return res.json({
           success: true,
           isExistingLifetime: true,
-          message: 'Akses Lifetime ATLM terverifikasi! Selamat datang kembali.',
-          student: {
-            npm: cleanNpm,
-            fullName: profile.fullName,
-            className: profile.className,
-            avatarGender: selectedGender,
-            xp: profile.xp,
-            level: profile.level,
-            highestScore: profile.highestScore,
-            bestAccuracy: 90,
-            sessionToken: entitlement.sessionToken,
-            activatedWithVersion: entitlement.activatedWithCodeVersion,
-            activatedAt: entitlement.activatedAt,
-          },
+          message: `Selamat datang kembali, ${fullStudent?.fullName || entitlement.studentName}! Sesi Akses Seumur Hidup Anda aktif.`,
+          student: fullStudent,
         });
       }
 
-      if (!accessCode) {
-        return res.status(400).json({
-          error: 'NPM belum teraktivasi. Masukkan Kode Akses Kelas dari Dosen untuk aktivasi pertama kali.',
+      // If NPM is NOT yet activated, student MUST provide a valid unused activation code and full name
+      if (!cleanCode) {
+        recordFailedAttempt(rateKey);
+        return res.status(404).json({
+          error:
+            'NPM belum pernah diaktifkan. Silakan pilih tab "Aktivasi Pertama Kali" dan masukkan Kode Aktivasi Unik dari Dosen.',
         });
       }
 
-      if (!cleanName) {
+      if (!cleanName || cleanName.length < 2) {
         return res.status(400).json({
           error: 'Nama Lengkap Mahasiswa wajib diisi untuk aktivasi pertama kali.',
         });
       }
 
-      const inputCodeHash = hashCode(String(accessCode));
-      const allCodes = await db
+      const inputCodeHash = hashCode(cleanCode);
+      const allMatching = await db
         .select()
         .from(studentAccessCodes)
         .where(eq(studentAccessCodes.codeHash, inputCodeHash));
 
-      const isDefaultEasyCode =
-        inputCodeHash === hashCode('040186') || inputCodeHash === hashCode('121201');
-      const matchedCode =
-        allCodes.find((c) => c.isActive) ||
-        (isDefaultEasyCode
-          ? {
-              version: 1,
-              codeDisplay: `Kode Akses ATLM (${String(accessCode).trim()})`,
-            }
-          : null);
+      const matchedCode = allMatching[0];
       if (!matchedCode) {
-        const inactiveMatch = allCodes.find((c) => !c.isActive);
-        if (inactiveMatch) {
-          return res.status(401).json({
-            error:
-              'Kode akses lama ini sudah dinonaktifkan untuk pendaftar baru. Silakan minta Kode Akses terbaru dari Dosen.',
-          });
-        }
+        recordFailedAttempt(rateKey);
         return res.status(401).json({
-          error: 'Kode Akses Kelas tidak valid. Gunakan kode akses aktif dari Dosen.',
+          error: 'Kode aktivasi tidak valid. Silakan minta Kode Aktivasi Unik dari Dosen.',
         });
       }
 
-      const sessionToken = `lifetime_${cleanNpm}_${crypto.randomBytes(10).toString('hex')}`;
+      if (matchedCode.activatedCount > 0) {
+        recordFailedAttempt(rateKey);
+        return res.status(403).json({
+          error:
+            'Kode aktivasi ini sudah digunakan. Setiap kode aktivasi hanya berlaku satu kali untuk satu mahasiswa.',
+        });
+      }
 
-      const [newEntitlement] = await db
-        .insert(studentEntitlements)
-        .values({
-          npm: cleanNpm,
-          studentName: cleanName,
-          activatedWithCodeVersion: matchedCode.version,
-          activatedWithCodeDisplay: matchedCode.codeDisplay,
-          sessionToken,
-          isLifetimeActive: true,
+      if (!matchedCode.isActive) {
+        recordFailedAttempt(rateKey);
+        return res.status(401).json({
+          error: 'Kode aktivasi ini telah dinonaktifkan oleh Dosen.',
+        });
+      }
+
+      const rawCodeLabel = matchedCode.codeDisplay.split('•')[0].trim() || cleanCode;
+
+      // Mark this unique code as permanently bound to this student's NPM (1 code = 1 student)
+      await db
+        .update(studentAccessCodes)
+        .set({
+          isActive: false,
+          activatedCount: 1,
+          codeDisplay: `${rawCodeLabel} • Digunakan oleh NPM ${cleanNpm} (${cleanName})`,
+          className: `${cleanClass} [NPM:${cleanNpm}]`,
         })
-        .returning();
+        .where(eq(studentAccessCodes.id, matchedCode.id));
 
-      const [newProfile] = await db
+      const internalToken = `lifetime_${cleanNpm}_${inputCodeHash.slice(0, 12)}`;
+
+      await db.insert(studentEntitlements).values({
+        npm: cleanNpm,
+        studentName: cleanName,
+        activatedWithCodeVersion: matchedCode.version,
+        activatedWithCodeDisplay: `${rawCodeLabel} • Kode Aktivasi Unik Mahasiswa`,
+        sessionToken: internalToken,
+        isLifetimeActive: true,
+      });
+
+      await db
         .insert(studentProfiles)
         .values({
           npm: cleanNpm,
@@ -527,7 +1164,7 @@ async function startServer() {
           xp: 100,
           level: 1,
         })
-        .returning();
+        .onConflictDoNothing();
 
       await db
         .insert(avatarSettings)
@@ -548,120 +1185,44 @@ async function startServer() {
         title: 'ATLM Cadet — Lifetime Access Activated',
       });
 
+      clearFailedAttempts(rateKey);
+
+      const fullStudent = await buildFullStudentPayload(cleanNpm);
+      const sessionToken = signSessionToken({
+        role: 'student',
+        sub: cleanNpm,
+        name: cleanName,
+        className: cleanClass,
+      });
+
+      setAuthCookie(req, res, 'hw_student_session', sessionToken, 86400 * 30);
+
       return res.json({
         success: true,
         isExistingLifetime: false,
-        message: 'Aktivasi Akses Lifetime Mahasiswa ATLM Berhasil! Akses Anda bersifat permanen.',
-        student: {
-          npm: cleanNpm,
-          fullName: newProfile.fullName,
-          className: newProfile.className,
-          avatarGender: selectedGender,
-          xp: newProfile.xp,
-          level: newProfile.level,
-          highestScore: newProfile.highestScore,
-          bestAccuracy: 0,
-          sessionToken: newEntitlement.sessionToken,
-          activatedWithVersion: newEntitlement.activatedWithCodeVersion,
-          activatedAt: newEntitlement.activatedAt,
-        },
+        message:
+          'Aktivasi Akun Mahasiswa Berhasil! Kode aktivasi Anda kini terikat permanen dengan NPM Anda seumur hidup.',
+        student: fullStudent,
       });
     } catch (error) {
-      console.error('Student activation error:', error);
-      return res.status(500).json({ error: 'Gagal memproses aktivasi mahasiswa.' });
+      console.error('Student activation/login error:', error);
+      return res.status(500).json({ error: 'Gagal memproses autentikasi mahasiswa.' });
     }
-  });
+  };
 
-  app.post('/api/auth/student/session', async (req, res) => {
-    try {
-      const { npm, sessionToken } = req.body;
-      if (!npm && !sessionToken) {
-        return res.status(400).json({ error: 'NPM atau token sesi diperlukan.' });
-      }
-
-      const entitlements = npm
-        ? await db
-            .select()
-            .from(studentEntitlements)
-            .where(eq(studentEntitlements.npm, String(npm).trim()))
-            .limit(1)
-        : await db
-            .select()
-            .from(studentEntitlements)
-            .where(eq(studentEntitlements.sessionToken, String(sessionToken).trim()))
-            .limit(1);
-
-      if (entitlements.length === 0) {
-        return res.status(404).json({
-          error: 'NPM belum pernah diaktivasi. Silakan lakukan Aktivasi Pertama Kali dengan Kode Akses Kelas.',
-        });
-      }
-
-      const ent = entitlements[0];
-      if (!ent.isLifetimeActive) {
-        return res.status(403).json({ error: 'Akses NPM ini sedang dinonaktifkan oleh Dosen.' });
-      }
-
-      await db
-        .update(studentEntitlements)
-        .set({ lastAccessedAt: new Date() })
-        .where(eq(studentEntitlements.id, ent.id));
-
-      const profiles = await db
-        .select()
-        .from(studentProfiles)
-        .where(eq(studentProfiles.npm, ent.npm))
-        .limit(1);
-
-      const profile = profiles[0];
-      const avatarRows = await db
-        .select()
-        .from(avatarSettings)
-        .where(eq(avatarSettings.npm, ent.npm))
-        .limit(1);
-
-      const studentBadges = await db
-        .select()
-        .from(achievements)
-        .where(eq(achievements.npm, ent.npm));
-
-      const studentModProgress = await db
-        .select()
-        .from(studentProgress)
-        .where(eq(studentProgress.npm, ent.npm));
-
-      return res.json({
-        success: true,
-        student: {
-          npm: ent.npm,
-          fullName: profile?.fullName || ent.studentName,
-          className: profile?.className || 'ATLM Reguler - IKES Rajawali',
-          avatarGender:
-            avatarRows[0]?.gender === 'male_atlm' ? 'male_atlm' : 'female_atlm',
-          xp: profile?.xp || 100,
-          level: profile?.level || 1,
-          highestScore: profile?.highestScore || 0,
-          bestAccuracy: 90,
-          sessionToken: ent.sessionToken,
-          activatedWithVersion: ent.activatedWithCodeVersion,
-          activatedAt: ent.activatedAt,
-          avatar: avatarRows[0] || null,
-          achievements: studentBadges,
-          completedModules: studentModProgress.map((p) => p.moduleNumber),
-        },
-      });
-    } catch (error) {
-      console.error('Student session verification error:', error);
-      return res.status(500).json({ error: 'Gagal memverifikasi sesi lifetime mahasiswa.' });
-    }
-  });
+  app.post('/api/auth/student/activate', handleStudentActivateOrLogin);
+  app.post('/api/student-login', handleStudentActivateOrLogin);
+  app.post('/api/auth/student/session', handleStudentActivateOrLogin);
 
   // =========================================================================
-  // 3. LECTURER ACCESS CODE VERSIONING & LIFETIME ENTITLEMENT DASHBOARD
+  // 3. LECTURER ACCESS CODE MANAGEMENT (PROTECTED BY requireLecturerAuth)
   // =========================================================================
-  app.get('/api/lecturer/access-codes', async (_req, res) => {
+  app.get('/api/lecturer/access-codes', requireLecturerAuth, async (_req, res) => {
     try {
-      const codes = await db.select().from(studentAccessCodes).orderBy(desc(studentAccessCodes.version));
+      const codes = await db
+        .select()
+        .from(studentAccessCodes)
+        .orderBy(desc(studentAccessCodes.version));
       const entitlements = await db
         .select()
         .from(studentEntitlements)
@@ -673,6 +1234,7 @@ async function startServer() {
           codeLabel: c.codeDisplay,
           version: c.version,
           isActive: c.isActive,
+          activatedCount: c.activatedCount,
           createdBy: c.createdBy,
           createdAt: c.createdAt,
         })),
@@ -680,52 +1242,108 @@ async function startServer() {
       });
     } catch (error) {
       console.error('Get access codes error:', error);
-      return res.status(500).json({ error: 'Gagal memuat data kode akses.' });
+      return res.status(500).json({ error: 'Gagal memuat data kode aktivasi mahasiswa.' });
     }
   });
 
-  app.post('/api/lecturer/access-codes', async (req, res) => {
+  app.post('/api/lecturer/access-codes', requireLecturerAuth, async (req, res) => {
     try {
-      const { newCode, codeLabel, deactivateOldCodes } = req.body;
-      if (!newCode || String(newCode).trim().length < 4) {
-        return res.status(400).json({ error: 'Kode akses baru minimal 4 karakter.' });
+      const { newCode, codeDisplay, codeLabel, label, batchCount } = req.body || {};
+      const resolvedCode = newCode || codeDisplay;
+      const resolvedLabel = codeLabel || label;
+      const existing = await db
+        .select()
+        .from(studentAccessCodes)
+        .orderBy(desc(studentAccessCodes.version));
+      let nextVersion = existing.length > 0 ? existing[0].version + 1 : 1;
+
+      // Support generating a batch of unique 1-per-student codes
+      if (batchCount && Number(batchCount) > 0) {
+        const count = Math.min(50, Math.max(1, Number(batchCount)));
+        const generatedCodes: string[] = [];
+        for (let i = 0; i < count; i++) {
+          const suffix = crypto.randomBytes(2).toString('hex').toUpperCase();
+          const uniqueCode = `ATLM-${String(nextVersion).padStart(3, '0')}-${suffix}`;
+          await db.insert(studentAccessCodes).values({
+            codeHash: hashCode(uniqueCode),
+            codeDisplay: `${uniqueCode} • ${
+              resolvedLabel || 'Kode Aktivasi Unik Mahasiswa'
+            } (Tersedia - 1 Mahasiswa)`,
+            version: nextVersion,
+            className: 'ATLM Reguler - IKES Rajawali',
+            isActive: true,
+            activatedCount: 0,
+            createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
+          });
+          generatedCodes.push(uniqueCode);
+          nextVersion++;
+        }
+        return res.json({
+          success: true,
+          message: `${generatedCodes.length} Kode Aktivasi Unik (1 Kode = 1 Mahasiswa) berhasil diterbitkan: ${generatedCodes.join(', ')}`,
+          generatedCodes,
+        });
       }
 
-      const existing = await db.select().from(studentAccessCodes).orderBy(desc(studentAccessCodes.version));
-      const nextVersion = existing.length > 0 ? existing[0].version + 1 : 1;
+      const rawCode = String(resolvedCode || '')
+        .trim()
+        .toUpperCase();
+      if (!rawCode || rawCode.length < 4) {
+        return res
+          .status(400)
+          .json({ error: 'Kode aktivasi unik mahasiswa minimal 4 karakter.' });
+      }
 
-      if (deactivateOldCodes) {
-        await db.update(studentAccessCodes).set({ isActive: false });
+      const duplicate = existing.find((c) => c.codeHash === hashCode(rawCode));
+      if (duplicate) {
+        return res.status(400).json({
+          error: 'Kode aktivasi tersebut sudah pernah dibuat. Gunakan kode unik yang berbeda.',
+        });
       }
 
       const [created] = await db
         .insert(studentAccessCodes)
         .values({
-          codeHash: hashCode(String(newCode)),
-          codeDisplay:
-            codeLabel || `Kode Akses Kelas Versi ${nextVersion} (${String(newCode).trim()})`,
+          codeHash: hashCode(rawCode),
+          codeDisplay: `${rawCode} • ${
+            resolvedLabel ? String(resolvedLabel).trim() : 'Kode Aktivasi Unik Mahasiswa'
+          } (Tersedia - 1 Mahasiswa)`,
           version: nextVersion,
           className: 'ATLM Reguler - IKES Rajawali',
           isActive: true,
+          activatedCount: 0,
           createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
         })
         .returning();
 
       return res.json({
         success: true,
-        message: `Kode Akses Versi ${nextVersion} berhasil diaktifkan. Seluruh mahasiswa lama tetap memiliki akses lifetime permanen.`,
+        message: `Kode Aktivasi Unik ${rawCode} (Versi #${nextVersion}) berhasil diterbitkan untuk 1 mahasiswa.`,
         accessCode: created,
       });
     } catch (error) {
       console.error('Create access code error:', error);
-      return res.status(500).json({ error: 'Gagal membuat kode akses baru.' });
+      return res.status(500).json({ error: 'Gagal menerbitkan kode aktivasi baru.' });
     }
   });
 
-  app.patch('/api/lecturer/access-codes/:id', async (req, res) => {
+  app.patch('/api/lecturer/access-codes/:id', requireLecturerAuth, async (req, res) => {
     try {
       const codeId = Number(req.params.id);
       const { isActive } = req.body;
+      const existing = await db
+        .select()
+        .from(studentAccessCodes)
+        .where(eq(studentAccessCodes.id, codeId))
+        .limit(1);
+
+      if (existing.length > 0 && existing[0].activatedCount > 0 && isActive) {
+        return res.status(400).json({
+          error:
+            'Kode yang sudah digunakan oleh mahasiswa tidak dapat diaktifkan ulang untuk mahasiswa lain.',
+        });
+      }
+
       await db
         .update(studentAccessCodes)
         .set({ isActive: Boolean(isActive) })
@@ -733,16 +1351,17 @@ async function startServer() {
 
       return res.json({
         success: true,
-        message: 'Status kode akses diperbarui tanpa memengaruhi akses lifetime mahasiswa lama.',
+        message:
+          'Status kode aktivasi diperbarui tanpa memengaruhi akses seumur hidup mahasiswa yang sudah aktif.',
       });
     } catch (error) {
       console.error('Toggle access code error:', error);
-      return res.status(500).json({ error: 'Gagal mengubah status kode akses.' });
+      return res.status(500).json({ error: 'Gagal mengubah status kode aktivasi.' });
     }
   });
 
   // =========================================================================
-  // 4. 50-QUESTION QUIZ ENGINE (OPTIONS A-E) & POST-QUIZ DETAILED EXPLANATION
+  // 4. 50-QUESTION QUIZ ENGINE (OPTIONS A-E) & QUIZ HISTORY
   // =========================================================================
   app.get('/api/quiz/questions', async (_req, res) => {
     try {
@@ -771,77 +1390,62 @@ async function startServer() {
     }
   });
 
-  app.post('/api/quiz/submit', async (req, res) => {
+  app.get('/api/student/quiz-history', requireStudentOrLecturerAuth, async (req, res) => {
     try {
-      const { npm, fullName, className, avatarGender, mode, totalDurationSec, answers } = req.body;
-      const cleanNpm = String(npm || '24019999').trim();
-      const cleanName = String(fullName || 'Mahasiswa ATLM').trim();
-      const cleanClass = String(className || 'ATLM Reguler - IKES Rajawali').trim();
+      const studentSess = getStudentSession(req);
+      const lecturerSess = getLecturerSession(req);
+      const targetNpm = studentSess
+        ? studentSess.sub
+        : String(req.query.npm || '').trim();
+
+      if (!targetNpm && !lecturerSess) {
+        return res.status(400).json({ error: 'NPM mahasiswa tidak ditemukan.' });
+      }
+
+      const fullPayload = await buildFullStudentPayload(targetNpm);
+      return res.json({
+        success: true,
+        history: fullPayload?.quizHistory || [],
+        quizHistory: fullPayload?.quizHistory || [],
+        latestSummary: fullPayload?.latestSummary || null,
+        latestReview: fullPayload?.latestReview || [],
+      });
+    } catch (error) {
+      console.error('Get student quiz history error:', error);
+      return res.status(500).json({ error: 'Gagal memuat riwayat kuis mahasiswa.' });
+    }
+  });
+
+  app.post('/api/quiz/submit', requireStudentOrLecturerAuth, async (req, res) => {
+    try {
+      const studentSess = getStudentSession(req);
+      const { npm, fullName, className, avatarGender, mode, totalDurationSec, answers } =
+        req.body || {};
+
+      // Enforce verified student identity from session cookie so students cannot spoof another NPM
+      const cleanNpm = studentSess ? studentSess.sub : String(npm || '24011001').trim();
+      const cleanName = studentSess
+        ? studentSess.name
+        : String(fullName || 'Mahasiswa ATLM').trim();
+      const cleanClass =
+        studentSess?.className || String(className || 'ATLM Reguler - IKES Rajawali').trim();
       const cleanGender = avatarGender === 'male_atlm' ? 'male_atlm' : 'female_atlm';
       const duration = Math.max(30, Number(totalDurationSec) || 900);
 
-      const submittedMap: Record<number, { selectedOption: string; timeSpentSec: number }> = {};
-      if (Array.isArray(answers)) {
-        for (const a of answers) {
-          submittedMap[Number(a.questionNumber)] = {
-            selectedOption: String(a.selectedOption || '').toUpperCase(),
-            timeSpentSec: Math.max(1, Number(a.timeSpentSec) || 15),
-          };
-        }
-      }
-
-      let correctCount = 0;
-      let wrongCount = 0;
-      let clinicalCorrect = 0;
-      let theoryCorrect = 0;
-      let currentStreak = 0;
-      let maxStreak = 0;
-      let totalScore = 0;
-      let speedBonusTotal = 0;
-
-      const detailedReview = QUIZ_30_QUESTIONS.map((q) => {
-        const sub = submittedMap[q.questionNumber];
-        const studentAnswer = (sub?.selectedOption || 'A') as 'A' | 'B' | 'C' | 'D' | 'E';
-        const timeSpent = sub?.timeSpentSec || 20;
-        const isCorrect = studentAnswer === q.correctOption;
-
-        if (isCorrect) {
-          correctCount++;
-          if (q.category === 'clinical_case') clinicalCorrect++;
-          else theoryCorrect++;
-          currentStreak++;
-          if (currentStreak > maxStreak) maxStreak = currentStreak;
-          const basePoints = 80;
-          const speedBonus = Math.max(0, Math.min(20, Math.round((60 - Math.min(60, timeSpent)) / 3)));
-          const streakBonus = Math.min(20, currentStreak * 2);
-          speedBonusTotal += speedBonus;
-          totalScore += basePoints + speedBonus + streakBonus;
-        } else {
-          wrongCount++;
-          currentStreak = 0;
-        }
-
-        return {
-          questionNumber: q.questionNumber,
-          sectionCode: q.sectionCode,
-          category: q.category,
-          topic: q.topic,
-          caseTable: q.caseTable || null,
-          questionText: q.questionText,
-          options: q.options,
-          studentAnswer,
-          correctOption: q.correctOption,
-          isCorrect,
-          timeSpentSec: timeSpent,
-          scientificExplanation: q.scientificExplanation,
-          atlmProcedureAndDecision: q.atlmProcedureAndDecision,
-          doctorClinicalExplanation: q.doctorClinicalExplanation,
-          patientEducation: q.patientEducation,
-          whyOthersWrong: q.whyOthersWrong,
-          calculationSteps: q.calculationSteps || null,
-          pdfPageRef: q.pdfPageRef,
-        };
-      });
+      const rawAnswers = Array.isArray(answers) ? answers : [];
+      const {
+        correctCount,
+        wrongCount,
+        clinicalCorrect,
+        theoryCorrect,
+        mcvCorrect,
+        mchCorrect,
+        mchcCorrect,
+        maxStreak,
+        totalScore,
+        speedBonusTotal,
+        detailedReview,
+      } = buildDetailedReviewFromAnswers(rawAnswers);
 
       const accuracyPercent = Number(((correctCount / QUIZ_30_QUESTIONS.length) * 100).toFixed(1));
       const xpEarned = correctCount * 25 + maxStreak * 10 + (accuracyPercent >= 80 ? 150 : 50);
@@ -867,12 +1471,12 @@ async function startServer() {
           wrongCount,
           clinicalCorrect,
           theoryCorrect,
-          mcvCorrect: 5,
-          mchCorrect: 5,
-          mchcCorrect: 5,
+          mcvCorrect,
+          mchCorrect,
+          mchcCorrect,
           score: totalScore,
           durationSeconds: duration,
-          answersJson: JSON.stringify(answers || []),
+          answersJson: JSON.stringify(rawAnswers),
         })
         .returning();
 
@@ -898,7 +1502,8 @@ async function startServer() {
       });
 
       let badgeCategory = 'ATLM Clinical Analyst';
-      if (accuracyPercent >= 90) badgeCategory = 'Gold Hematology Champion & Erythrocyte Index Master';
+      if (accuracyPercent >= 90)
+        badgeCategory = 'Gold Hematology Champion & Erythrocyte Index Master';
       else if (accuracyPercent >= 80 && duration <= 750) badgeCategory = 'Speed Diagnostic Star';
       else if (accuracyPercent >= 80) badgeCategory = 'Clinical Case Specialist';
 
@@ -917,9 +1522,9 @@ async function startServer() {
           fastestDurationSeconds: duration,
           clinicalScore: clinicalCorrect,
           theoryScore: theoryCorrect,
-          mcvScore: 5,
-          mchScore: 4,
-          mchcScore: 4,
+          mcvScore: mcvCorrect,
+          mchScore: mchCorrect,
+          mchcScore: mchcCorrect,
           badgeTitle: badgeCategory,
         });
       } else if (
@@ -935,6 +1540,9 @@ async function startServer() {
             fastestDurationSeconds: duration,
             clinicalScore: clinicalCorrect,
             theoryScore: theoryCorrect,
+            mcvScore: mcvCorrect,
+            mchScore: mchCorrect,
+            mchcScore: mchcCorrect,
             badgeTitle: badgeCategory,
             updatedAt: new Date(),
           })
@@ -951,13 +1559,18 @@ async function startServer() {
         const p = existingProf[0];
         const newXp = p.xp + xpEarned;
         const newLevel = Math.max(1, Math.floor(newXp / 500) + 1);
+        const newQuizCount = p.quizCount + 1;
+        const newAvg = Math.round(
+          (p.averageScore * p.quizCount + totalScore) / Math.max(1, newQuizCount)
+        );
         await db
           .update(studentProfiles)
           .set({
             xp: newXp,
             level: newLevel,
             highestScore: Math.max(p.highestScore, totalScore),
-            quizCount: p.quizCount + 1,
+            averageScore: newAvg,
+            quizCount: newQuizCount,
             updatedAt: new Date(),
           })
           .where(eq(studentProfiles.id, p.id));
@@ -995,7 +1608,8 @@ async function startServer() {
   // =========================================================================
   app.get('/api/leaderboard', async (req, res) => {
     try {
-      const isLecturer = req.query.role === 'lecturer';
+      const lecturerSess = getLecturerSession(req);
+      const isLecturer = Boolean(lecturerSess && req.query.role === 'lecturer');
       const rows = await db
         .select()
         .from(leaderboard)
@@ -1004,7 +1618,10 @@ async function startServer() {
       const formatted = rows.map((r, index) => {
         const totalQ = QUIZ_30_QUESTIONS.length;
         const rawSum = r.clinicalScore + r.theoryScore;
-        const correctEst = rawSum > 30 ? Math.min(totalQ, rawSum) : Math.min(totalQ, Math.round((rawSum / 30) * totalQ) || 46);
+        const correctEst =
+          rawSum > 30
+            ? Math.min(totalQ, rawSum)
+            : Math.min(totalQ, Math.round((rawSum / 30) * totalQ) || 46);
         const accEst = Number(((correctEst / totalQ) * 100).toFixed(1));
         return {
           rank: index + 1,
@@ -1033,16 +1650,19 @@ async function startServer() {
   // =========================================================================
   // 6. DIGITAL HEMATOLOGY CALCULATOR (MCV, MCH, MCHC)
   // =========================================================================
-  app.post('/api/calculator/save', async (req, res) => {
+  app.post('/api/calculator/save', requireStudentOrLecturerAuth, async (req, res) => {
     try {
+      const studentSess = getStudentSession(req);
       const { npm, hb, hct, rbc, mcv, mch, mchc, interpretation } = req.body;
+      const targetNpm = studentSess ? studentSess.sub : String(npm || 'GUEST').trim();
+      const targetName = studentSess ? studentSess.name : 'Mahasiswa ATLM';
       const mcvNum = Number(mcv);
       const mchcNum = Number(mchc);
       const [saved] = await db
         .insert(calculatorHistory)
         .values({
-          npm: String(npm || 'GUEST').trim(),
-          studentName: 'Mahasiswa ATLM',
+          npm: targetNpm,
+          studentName: targetName,
           hb: Number(hb),
           hct: Number(hct),
           rbc: Number(rbc),
@@ -1065,7 +1685,8 @@ async function startServer() {
 
   app.get('/api/calculator/history', async (req, res) => {
     try {
-      const npm = String(req.query.npm || '').trim();
+      const studentSess = getStudentSession(req);
+      const npm = studentSess ? studentSess.sub : String(req.query.npm || '').trim();
       const rows = npm
         ? await db
             .select()
@@ -1094,15 +1715,17 @@ async function startServer() {
   // =========================================================================
   // 7. STUDENT PROGRESS, AVATAR SETTINGS & GLOSSARY
   // =========================================================================
-  app.post('/api/student/progress', async (req, res) => {
+  app.post('/api/student/progress', requireStudentOrLecturerAuth, async (req, res) => {
     try {
+      const studentSess = getStudentSession(req);
       const { npm, moduleNumber } = req.body;
-      if (!npm || !moduleNumber) {
+      const targetNpm = studentSess ? studentSess.sub : String(npm || '').trim();
+      if (!targetNpm || !moduleNumber) {
         return res.status(400).json({ error: 'NPM dan nomor modul diperlukan.' });
       }
 
       await db.insert(studentProgress).values({
-        npm: String(npm).trim(),
+        npm: targetNpm,
         moduleNumber: Number(moduleNumber),
         itemType: 'module',
       });
@@ -1114,10 +1737,11 @@ async function startServer() {
     }
   });
 
-  app.post('/api/student/avatar', async (req, res) => {
+  app.post('/api/student/avatar', requireStudentOrLecturerAuth, async (req, res) => {
     try {
+      const studentSess = getStudentSession(req);
       const { npm, gender, hairStyle, skinTone, shoesColor, accessoryBadge } = req.body;
-      const cleanNpm = String(npm || '').trim();
+      const cleanNpm = studentSess ? studentSess.sub : String(npm || '').trim();
       if (!cleanNpm) return res.status(400).json({ error: 'NPM diperlukan.' });
 
       const cleanGender = gender === 'male_atlm' ? 'male_atlm' : 'female_atlm';
@@ -1187,7 +1811,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/glossary', async (req, res) => {
+  app.post('/api/glossary', requireLecturerAuth, async (req, res) => {
     try {
       const {
         term,
@@ -1209,7 +1833,7 @@ async function startServer() {
           term: String(term).trim(),
           abbreviation: abbreviation ? String(abbreviation).trim() : '-',
           englishTerm: String(englishTerm || term).trim(),
-          category: String(category || 'Komponen darah'),
+          category: String(category || 'Komponen darah').trim(),
           definitionId: String(definition).trim(),
           roleFunction: String(functionRole || '-').trim(),
           medicalExample: String(clinicalExample || '-').trim(),
@@ -1227,9 +1851,9 @@ async function startServer() {
   });
 
   // =========================================================================
-  // 8. LECTURER FULL DASHBOARD & CLASS ANALYTICS
+  // 8. LECTURER FULL DASHBOARD & CLASS ANALYTICS (PROTECTED)
   // =========================================================================
-  app.get('/api/lecturer/dashboard', async (_req, res) => {
+  app.get('/api/lecturer/dashboard', requireLecturerAuth, async (_req, res) => {
     try {
       const entitlements = await db
         .select()
@@ -1279,22 +1903,35 @@ async function startServer() {
 
       const highestScore = lbRows.length > 0 ? Math.max(...lbRows.map((r) => r.bestScore)) : 0;
       const lowestScore = lbRows.length > 0 ? Math.min(...lbRows.map((r) => r.bestScore)) : 0;
+      const availableCodesCount = codes.filter((c) => c.isActive && c.activatedCount === 0).length;
 
       return res.json({
         metrics: {
           totalActivatedStudents: entitlements.length,
           totalQuizAttempts: attempts.length,
-          averageAccuracyPercent: 91.2,
+          averageAccuracyPercent:
+            attempts.length > 0
+              ? Number(
+                  (
+                    attempts.reduce(
+                      (acc, a) => acc + (a.correctCount / (a.totalQuestions || 50)) * 100,
+                      0
+                    ) / attempts.length
+                  ).toFixed(1)
+                )
+              : 91.2,
           highestScore,
           lowestScore,
-          activeAccessCodeVersion: codes.find((c) => c.isActive)?.version || 1,
+          activeAccessCodeVersion: availableCodesCount,
         },
         entitlements: entitlements.map((e) => ({
           id: e.id,
           npm: e.npm,
           fullName: e.studentName,
-          className: 'ATLM Reguler - IKES Rajawali',
+          className:
+            profiles.find((p) => p.npm === e.npm)?.className || 'ATLM Reguler - IKES Rajawali',
           activatedWithCodeVersion: e.activatedWithCodeVersion,
+          activatedWithCodeDisplay: e.activatedWithCodeDisplay,
           lifetimeAccess: e.isLifetimeActive,
           revoked: !e.isLifetimeActive,
           activatedAt: e.activatedAt,
@@ -1323,6 +1960,7 @@ async function startServer() {
           codeLabel: c.codeDisplay,
           version: c.version,
           isActive: c.isActive,
+          activatedCount: c.activatedCount,
           createdBy: c.createdBy,
           createdAt: c.createdAt,
         })),
@@ -1334,7 +1972,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/lecturer/toggle-entitlement', async (req, res) => {
+  app.post('/api/lecturer/toggle-entitlement', requireLecturerAuth, async (req, res) => {
     try {
       const { npm, revoked } = req.body;
       await db

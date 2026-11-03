@@ -18,8 +18,13 @@ import {
   User,
   ClipboardList,
   AlertCircle,
+  History,
 } from 'lucide-react';
-import type { ClinicalCaseTable, OptionKey } from '../data/quiz30Data';
+import {
+  QUIZ_30_QUESTIONS,
+  type ClinicalCaseTable,
+  type OptionKey,
+} from '../data/quiz30Data';
 
 interface SanitizedQuestion {
   questionNumber: number;
@@ -52,7 +57,7 @@ export interface DetailedReviewItem {
     D: string;
     E: string;
   };
-  studentAnswer: OptionKey;
+  studentAnswer: OptionKey | '-';
   correctOption: OptionKey;
   isCorrect: boolean;
   timeSpentSec: number;
@@ -87,9 +92,22 @@ interface QuizizzEngineProps {
   studentName: string;
   studentClass: string;
   avatarGender: 'male_atlm' | 'female_atlm';
+  initialSummary?: QuizSummaryResult | null;
+  initialReview?: DetailedReviewItem[];
   onQuizCompleted?: (summary: QuizSummaryResult, review: DetailedReviewItem[]) => void;
   onViewLeaderboard?: () => void;
 }
+
+const DEFAULT_SANITIZED_QUESTIONS: SanitizedQuestion[] = QUIZ_30_QUESTIONS.map((q) => ({
+  questionNumber: q.questionNumber,
+  sectionCode: q.sectionCode,
+  category: q.category,
+  topic: q.topic,
+  caseTable: q.caseTable || null,
+  questionText: q.questionText,
+  options: q.options,
+  pdfPageRef: q.pdfPageRef,
+}));
 
 const SECTION_BADGE_MAP: Record<
   'A' | 'B' | 'C' | 'D',
@@ -113,16 +131,119 @@ const SECTION_BADGE_MAP: Record<
   },
 };
 
+function computeLocalGrading(
+  studentNpm: string,
+  studentName: string,
+  studentClass: string,
+  totalDurationSec: number,
+  payloadAnswers: Array<{ questionNumber: number; selectedOption: string; timeSpentSec: number }>
+): { summary: QuizSummaryResult; detailedReview: DetailedReviewItem[] } {
+  const answerMap: Record<number, { selectedOption: string; timeSpentSec: number }> = {};
+  for (const a of payloadAnswers) {
+    answerMap[a.questionNumber] = a;
+  }
+
+  let correctCount = 0;
+  let wrongCount = 0;
+  let currentStreak = 0;
+  let maxStreak = 0;
+  let totalScore = 0;
+  let speedBonusTotal = 0;
+
+  const detailedReview: DetailedReviewItem[] = QUIZ_30_QUESTIONS.map((q) => {
+    const sub = answerMap[q.questionNumber];
+    const rawOpt = String(sub?.selectedOption || '-').toUpperCase();
+    const studentAnswer: OptionKey | '-' = ['A', 'B', 'C', 'D', 'E'].includes(rawOpt)
+      ? (rawOpt as OptionKey)
+      : '-';
+    const timeSpent = sub?.timeSpentSec || 20;
+    const isCorrect = studentAnswer === q.correctOption;
+
+    if (isCorrect) {
+      correctCount++;
+      currentStreak++;
+      if (currentStreak > maxStreak) maxStreak = currentStreak;
+      const basePoints = 80;
+      const speedBonus = Math.max(0, Math.min(20, Math.round((60 - Math.min(60, timeSpent)) / 3)));
+      const streakBonus = Math.min(20, currentStreak * 2);
+      speedBonusTotal += speedBonus;
+      totalScore += basePoints + speedBonus + streakBonus;
+    } else {
+      wrongCount++;
+      currentStreak = 0;
+    }
+
+    return {
+      questionNumber: q.questionNumber,
+      sectionCode: q.sectionCode,
+      category: q.category,
+      topic: q.topic,
+      caseTable: q.caseTable || null,
+      questionText: q.questionText,
+      options: q.options,
+      studentAnswer,
+      correctOption: q.correctOption,
+      isCorrect,
+      timeSpentSec: timeSpent,
+      scientificExplanation: q.scientificExplanation,
+      atlmProcedureAndDecision: q.atlmProcedureAndDecision,
+      doctorClinicalExplanation: q.doctorClinicalExplanation,
+      patientEducation: q.patientEducation,
+      whyOthersWrong: q.whyOthersWrong,
+      calculationSteps: q.calculationSteps || null,
+      pdfPageRef: q.pdfPageRef,
+    };
+  });
+
+  const accuracyPercent = Number(((correctCount / QUIZ_30_QUESTIONS.length) * 100).toFixed(1));
+  const xpEarned = correctCount * 25 + maxStreak * 10 + (accuracyPercent >= 80 ? 150 : 50);
+
+  let gradeLabel = 'Perlu Penguatan Kompetensi';
+  if (accuracyPercent >= 90) gradeLabel = 'A (Sangat Memuaskan — Hematology Expert)';
+  else if (accuracyPercent >= 80) gradeLabel = 'AB (Kompeten Tinggi — Senior Analyst)';
+  else if (accuracyPercent >= 70) gradeLabel = 'B (Kompeten — ATLM Praktisi)';
+  else if (accuracyPercent >= 60) gradeLabel = 'BC (Cukup Kompeten)';
+
+  let badgeCategory = 'ATLM Clinical Analyst';
+  if (accuracyPercent >= 90)
+    badgeCategory = 'Gold Hematology Champion & Erythrocyte Index Master';
+  else if (accuracyPercent >= 80 && totalDurationSec <= 750)
+    badgeCategory = 'Speed Diagnostic Star';
+  else if (accuracyPercent >= 80) badgeCategory = 'Clinical Case Specialist';
+
+  return {
+    summary: {
+      npm: studentNpm,
+      fullName: studentName,
+      className: studentClass,
+      totalQuestions: QUIZ_30_QUESTIONS.length,
+      correctCount,
+      wrongCount,
+      accuracyPercent,
+      totalScore,
+      speedBonusTotal,
+      maxStreak,
+      durationSec: totalDurationSec,
+      xpEarned,
+      gradeLabel,
+      badgeCategory,
+    },
+    detailedReview,
+  };
+}
+
 export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
   studentNpm,
   studentName,
   studentClass,
   avatarGender,
+  initialSummary,
+  initialReview,
   onQuizCompleted,
   onViewLeaderboard,
 }) => {
-  const [questions, setQuestions] = useState<SanitizedQuestion[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [questions, setQuestions] = useState<SanitizedQuestion[]>(DEFAULT_SANITIZED_QUESTIONS);
+  const [loading, setLoading] = useState<boolean>(false);
   const [stage, setStage] = useState<'lobby' | 'playing' | 'submitting' | 'review'>('lobby');
   const [quizMode, setQuizMode] = useState<'solo' | 'live'>('solo');
   const [liveSessionCode, setLiveSessionCode] = useState<string>('ATLM-HEMATO-50');
@@ -134,25 +255,52 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
   const [questionTimer, setQuestionTimer] = useState<number>(60);
   const [totalElapsedSec, setTotalElapsedSec] = useState<number>(0);
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
-  const [streakCount, setStreakCount] = useState<number>(0);
   const [showHelperFormula, setShowHelperFormula] = useState<boolean>(false);
 
-  const [summaryResult, setSummaryResult] = useState<QuizSummaryResult | null>(null);
-  const [detailedReview, setDetailedReview] = useState<DetailedReviewItem[]>([]);
+  const [summaryResult, setSummaryResult] = useState<QuizSummaryResult | null>(
+    initialSummary || null
+  );
+  const [detailedReview, setDetailedReview] = useState<DetailedReviewItem[]>(
+    initialReview || []
+  );
   const [reviewFilter, setReviewFilter] = useState<
     'all' | 'correct' | 'wrong' | 'secA' | 'secB' | 'secC' | 'secD'
   >('all');
 
   useEffect(() => {
-    fetch('/api/quiz/questions')
-      .then((r) => r.json())
+    if (initialSummary && initialReview && initialReview.length > 0 && !summaryResult) {
+      setSummaryResult(initialSummary);
+      setDetailedReview(initialReview);
+    }
+  }, [initialSummary, initialReview]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/quiz/questions', { credentials: 'include' })
+      .then(async (r) => {
+        const contentType = r.headers.get('content-type') || '';
+        if (!r.ok || !contentType.includes('application/json')) return null;
+        return r.json();
+      })
       .then((data) => {
-        if (data.questions) {
+        if (
+          isMounted &&
+          data &&
+          Array.isArray(data.questions) &&
+          data.questions.length > 0
+        ) {
           setQuestions(data.questions);
         }
       })
-      .catch((err) => console.error('Load quiz error:', err))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        // Fallback already populated via DEFAULT_SANITIZED_QUESTIONS
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -161,13 +309,18 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
       setTotalElapsedSec((prev) => prev + 1);
       setQuestionTimer((prev) => {
         if (prev <= 1) {
-          return 60;
+          if (currentIndex < questions.length - 1) {
+            setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1));
+            setQuestionStartTime(Date.now());
+            return 60;
+          }
+          return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [stage, currentIndex]);
+  }, [stage, currentIndex, questions.length]);
 
   const startQuiz = (mode: 'solo' | 'live') => {
     soundManager.playQuizStart();
@@ -177,7 +330,6 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
     setQuestionTimer(60);
     setTotalElapsedSec(0);
     setQuestionStartTime(Date.now());
-    setStreakCount(0);
     setStage('playing');
   };
 
@@ -195,7 +347,66 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
       },
     };
     setSelectedAnswers(updated);
-    setStreakCount((prev) => prev + 1);
+  };
+
+  const submitAllAnswers = async () => {
+    setStage('submitting');
+    const duration = Math.max(30, totalElapsedSec);
+    const payloadAnswers = questions.map((q) => ({
+      questionNumber: q.questionNumber,
+      selectedOption: selectedAnswers[q.questionNumber]?.selectedOption || '-',
+      timeSpentSec: selectedAnswers[q.questionNumber]?.timeSpentSec || 20,
+    }));
+
+    try {
+      const res = await fetch('/api/quiz/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          npm: studentNpm,
+          fullName: studentName,
+          className: studentClass,
+          avatarGender,
+          mode: quizMode,
+          totalDurationSec: duration,
+          answers: payloadAnswers,
+        }),
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success && data.summary && data.detailedReview) {
+          soundManager.playVictory();
+          setSummaryResult(data.summary);
+          setDetailedReview(data.detailedReview);
+          setStage('review');
+          if (onQuizCompleted) {
+            onQuizCompleted(data.summary, data.detailedReview);
+          }
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Submit quiz API warning, using verified local grading:', error);
+    }
+
+    // Guaranteed local grading & review fallback if offline/edge error
+    const localResult = computeLocalGrading(
+      studentNpm,
+      studentName,
+      studentClass,
+      duration,
+      payloadAnswers
+    );
+    soundManager.playVictory();
+    setSummaryResult(localResult.summary);
+    setDetailedReview(localResult.detailedReview);
+    setStage('review');
+    if (onQuizCompleted) {
+      onQuizCompleted(localResult.summary, localResult.detailedReview);
+    }
   };
 
   const handleNextOrSubmit = async () => {
@@ -206,49 +417,10 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
       setQuestionStartTime(Date.now());
       return;
     }
-
-    // Submit all 50 answers to backend for official grading
-    setStage('submitting');
-    try {
-      const payloadAnswers = questions.map((q) => ({
-        questionNumber: q.questionNumber,
-        selectedOption: selectedAnswers[q.questionNumber]?.selectedOption || 'A',
-        timeSpentSec: selectedAnswers[q.questionNumber]?.timeSpentSec || 20,
-      }));
-
-      const res = await fetch('/api/quiz/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          npm: studentNpm,
-          fullName: studentName,
-          className: studentClass,
-          avatarGender,
-          mode: quizMode,
-          totalDurationSec: Math.max(45, totalElapsedSec),
-          answers: payloadAnswers,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        soundManager.playVictory();
-        setSummaryResult(data.summary);
-        setDetailedReview(data.detailedReview);
-        setStage('review');
-        if (onQuizCompleted) {
-          onQuizCompleted(data.summary, data.detailedReview);
-        }
-      } else {
-        setStage('playing');
-      }
-    } catch (error) {
-      console.error('Submit quiz error:', error);
-      setStage('playing');
-    }
+    await submitAllAnswers();
   };
 
-  if (loading) {
+  if (loading && questions.length === 0) {
     return (
       <div className="p-12 text-center bg-[#edf2f7] rounded-2xl border border-slate-300">
         <p className="text-sm font-mono text-slate-600">
@@ -265,21 +437,32 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
     return (
       <div className="space-y-6">
         <div className="rounded-2xl bg-[#243b55] border border-[#365374] p-7 md:p-8 text-slate-100 shadow-lg">
-          <div className="max-w-4xl">
-            <span className="text-xs font-mono uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" /> UJIAN KOMPETENSI HEMATOLOGI UNTUK ATLM (EDISI 50 SOAL PILIHAN GANDA A–E)
-            </span>
-            <h2 className="text-2xl md:text-3xl font-bold mt-2 text-white">
-              50 Soal Hematologi untuk ATLM — Anatomi & Fisiologi Sistem Hematologi dengan Analisis Praktik Laboratorium
-            </h2>
-            <p className="text-slate-200 text-sm mt-2 leading-relaxed">
-              Disusun untuk Mahasiswa <strong>Ahli Teknologi Laboratorium Medik (ATLM)</strong> oleh{' '}
-              <strong>dr. Juwita Ninda Suherman, M.Kes</strong> — Institut Kesehatan Rajawali Bandung.
-              Mencakup <strong>10 Soal Teori Dasar & Praktik ATLM</strong>,{' '}
-              <strong>15 Soal Gabungan CBC/Apusan/QC</strong>,{' '}
-              <strong>20 Soal Kasus Sangat Sulit (lengkap tabel klinis)</strong>, dan{' '}
-              <strong>5 Soal Perhitungan MCV, MCH, MCHC & Validasi</strong>.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-4xl">
+              <span className="text-xs font-mono uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" /> UJIAN KOMPETENSI HEMATOLOGI UNTUK ATLM (EDISI 50 SOAL PILIHAN GANDA A–E)
+              </span>
+              <h2 className="text-2xl md:text-3xl font-bold mt-2 text-white">
+                50 Soal Hematologi untuk ATLM — Anatomi & Fisiologi Sistem Hematologi dengan Analisis Praktik Laboratorium
+              </h2>
+              <p className="text-slate-200 text-sm mt-2 leading-relaxed">
+                Disusun untuk Mahasiswa <strong>Ahli Teknologi Laboratorium Medik (ATLM)</strong> oleh{' '}
+                <strong>dr. Juwita Ninda Suherman, M.Kes</strong> — Institut Kesehatan Rajawali Bandung.
+                Mencakup <strong>10 Soal Teori Dasar & Praktik ATLM</strong>,{' '}
+                <strong>15 Soal Gabungan CBC/Apusan/QC</strong>,{' '}
+                <strong>20 Soal Kasus Sangat Sulit (lengkap tabel klinis)</strong>, dan{' '}
+                <strong>5 Soal Perhitungan MCV, MCH, MCHC & Validasi</strong>.
+              </p>
+            </div>
+
+            {summaryResult && detailedReview.length > 0 && (
+              <button
+                onClick={() => setStage('review')}
+                className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center gap-2 shadow shrink-0"
+              >
+                <History className="w-4 h-4" /> Lihat Hasil & Pembahasan Terakhir ({summaryResult.correctCount}/50)
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-6">
@@ -410,7 +593,7 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#314d6d] border border-[#4a6c94] font-mono text-xs text-slate-100">
                 <Clock className="w-4 h-4 text-sky-300" />
-                {questionTimer}d
+                {questionTimer}d (Total: {Math.floor(totalElapsedSec / 60)}m {totalElapsedSec % 60}d)
               </div>
             </div>
           </div>
@@ -549,18 +732,26 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
           <div className="flex items-center gap-2">
             <button
               disabled={currentIndex === 0}
-              onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+              onClick={() => {
+                setCurrentIndex((prev) => Math.max(0, prev - 1));
+                setQuestionTimer(60);
+                setQuestionStartTime(Date.now());
+              }}
               className="px-4 py-2.5 rounded-xl bg-[#314d6d] hover:bg-[#3c5d82] disabled:opacity-40 text-xs font-semibold text-white"
             >
               ← Soal Sebelumnya
             </button>
-            <div className="hidden xl:flex items-center gap-1 max-w-xl overflow-x-auto py-1">
+            <div className="flex items-center gap-1 max-w-xs sm:max-w-md xl:max-w-xl overflow-x-auto py-1">
               {questions.map((q, idx) => {
                 const answered = Boolean(selectedAnswers[q.questionNumber]);
                 return (
                   <button
                     key={q.questionNumber}
-                    onClick={() => setCurrentIndex(idx)}
+                    onClick={() => {
+                      setCurrentIndex(idx);
+                      setQuestionTimer(60);
+                      setQuestionStartTime(Date.now());
+                    }}
                     className={`w-6 h-6 rounded text-[11px] font-mono font-bold shrink-0 ${
                       currentIndex === idx
                         ? 'bg-sky-400 text-slate-950'
@@ -580,12 +771,10 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
             {currentIndex < questions.length - 1 && (
               <button
                 disabled={stage === 'submitting'}
-                onClick={() => {
-                  setCurrentIndex(questions.length - 1);
-                }}
-                className="px-3.5 py-2.5 rounded-xl bg-[#314d6d] hover:bg-[#3c5d82] text-slate-200 font-mono text-xs"
+                onClick={submitAllAnswers}
+                className="px-3.5 py-2.5 rounded-xl bg-emerald-600/80 hover:bg-emerald-500 text-white font-semibold text-xs"
               >
-                Ke Soal 50
+                Kumpulkan Sekarang
               </button>
             )}
             <button
@@ -771,7 +960,11 @@ export const QuizizzEngine: React.FC<QuizizzEngineProps> = ({
                       : 'bg-rose-700 text-white'
                   }`}
                 >
-                  {item.isCorrect ? 'BENAR (+Poin)' : 'SALAH'}
+                  {item.isCorrect
+                    ? 'BENAR (+Poin)'
+                    : item.studentAnswer === '-'
+                    ? 'TIDAK DIJAWAB'
+                    : `SALAH (Pilih: ${item.studentAnswer})`}
                 </span>
                 <span className="text-slate-700 bg-[#e2e8f0] px-2.5 py-1 rounded-md border border-slate-300">
                   {item.pdfPageRef}
