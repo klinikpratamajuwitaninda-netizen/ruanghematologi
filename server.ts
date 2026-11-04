@@ -1540,16 +1540,46 @@ async function startServer() {
         .orderBy(desc(studentEntitlements.activatedAt));
 
       return res.json({
-        accessCodes: codes.map((c) => ({
-          id: c.id,
-          pureCode: extractRawCodeFromDisplay(c.codeDisplay),
-          codeLabel: c.codeDisplay,
-          version: c.version,
-          isActive: c.isActive,
-          activatedCount: c.activatedCount,
-          createdBy: c.createdBy,
-          createdAt: c.createdAt,
-        })),
+        accessCodes: codes.map((c) => {
+          const pureCode = extractRawCodeFromDisplay(c.codeDisplay);
+          const matchedEnt = entitlements.find(
+            (e) =>
+              e.activatedWithCodeVersion === c.version ||
+              extractRawCodeFromDisplay(e.activatedWithCodeDisplay) === pureCode
+          );
+          const npmTag = c.className.match(/\[NPM:([^\]]+)\]/i)?.[1];
+          const dispNpm = c.codeDisplay.match(/NPM\s+([A-Za-z0-9_-]+)/i)?.[1];
+          const dispName = c.codeDisplay.match(/\(([^)]+)\)\s*$/)?.[1];
+          const isUsed = c.activatedCount > 0 || Boolean(matchedEnt);
+          const statusLabel: 'Tersedia' | 'Sudah Digunakan' | 'Dinonaktifkan' = isUsed
+            ? 'Sudah Digunakan'
+            : c.isActive
+            ? 'Tersedia'
+            : 'Dinonaktifkan';
+          const rawCategory = c.className.split('[NPM:')[0].trim() || 'ATLM Reguler - IKES Rajawali';
+          const labelPart =
+            c.codeDisplay
+              .split('•')[1]
+              ?.replace(/\(Tersedia[^)]*\)/gi, '')
+              ?.replace(/Digunakan oleh NPM.*$/gi, '')
+              ?.trim() || 'Kode Aktivasi Unik Mahasiswa';
+
+          return {
+            id: c.id,
+            pureCode,
+            codeLabel: c.codeDisplay,
+            programCategory: rawCategory,
+            batchLabel: labelPart,
+            version: c.version,
+            isActive: c.isActive,
+            activatedCount: c.activatedCount,
+            statusLabel,
+            usedByStudentNpm: isUsed ? matchedEnt?.npm || npmTag || dispNpm || null : null,
+            usedByStudentName: isUsed ? matchedEnt?.studentName || dispName || null : null,
+            createdBy: c.createdBy,
+            createdAt: c.createdAt,
+          };
+        }),
         entitlements,
       });
     } catch (error) {
@@ -1579,7 +1609,7 @@ async function startServer() {
 
         // Support generating a batch of unique 1-per-student codes atomically
         if (batchCount && Number(batchCount) > 0) {
-          const count = Math.min(100, Math.max(1, Number(batchCount)));
+          const count = Math.min(200, Math.max(1, Number(batchCount)));
           const generatedCodes: string[] = [];
           const createdRecords: Array<typeof studentAccessCodes.$inferSelect> = [];
 
@@ -2306,16 +2336,46 @@ async function startServer() {
             completedAt: a.completedAt,
           };
         }),
-        accessCodes: codes.map((c) => ({
-          id: c.id,
-          pureCode: extractRawCodeFromDisplay(c.codeDisplay),
-          codeLabel: c.codeDisplay,
-          version: c.version,
-          isActive: c.isActive,
-          activatedCount: c.activatedCount,
-          createdBy: c.createdBy,
-          createdAt: c.createdAt,
-        })),
+        accessCodes: codes.map((c) => {
+          const pureCode = extractRawCodeFromDisplay(c.codeDisplay);
+          const matchedEnt = entitlements.find(
+            (e) =>
+              e.activatedWithCodeVersion === c.version ||
+              extractRawCodeFromDisplay(e.activatedWithCodeDisplay) === pureCode
+          );
+          const npmTag = c.className.match(/\[NPM:([^\]]+)\]/i)?.[1];
+          const dispNpm = c.codeDisplay.match(/NPM\s+([A-Za-z0-9_-]+)/i)?.[1];
+          const dispName = c.codeDisplay.match(/\(([^)]+)\)\s*$/)?.[1];
+          const isUsed = c.activatedCount > 0 || Boolean(matchedEnt);
+          const statusLabel: 'Tersedia' | 'Sudah Digunakan' | 'Dinonaktifkan' = isUsed
+            ? 'Sudah Digunakan'
+            : c.isActive
+            ? 'Tersedia'
+            : 'Dinonaktifkan';
+          const rawCategory = c.className.split('[NPM:')[0].trim() || 'ATLM Reguler - IKES Rajawali';
+          const labelPart =
+            c.codeDisplay
+              .split('•')[1]
+              ?.replace(/\(Tersedia[^)]*\)/gi, '')
+              ?.replace(/Digunakan oleh NPM.*$/gi, '')
+              ?.trim() || 'Kode Aktivasi Unik Mahasiswa';
+
+          return {
+            id: c.id,
+            pureCode,
+            codeLabel: c.codeDisplay,
+            programCategory: rawCategory,
+            batchLabel: labelPart,
+            version: c.version,
+            isActive: c.isActive,
+            activatedCount: c.activatedCount,
+            statusLabel,
+            usedByStudentNpm: isUsed ? matchedEnt?.npm || npmTag || dispNpm || null : null,
+            usedByStudentName: isUsed ? matchedEnt?.studentName || dispName || null : null,
+            createdBy: c.createdBy,
+            createdAt: c.createdAt,
+          };
+        }),
         questionStats,
       });
     } catch (error) {

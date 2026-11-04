@@ -27,7 +27,21 @@ import {
   RefreshCw,
   Sparkles,
   Copy,
+  FileDown,
+  FileText,
+  Filter,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
+import {
+  ActivationCodeExportItem,
+  PdfFilterMode,
+  createActivationCodesPdfDocument,
+  extractBatchOrCategory,
+  extractPureCode,
+  formatIndonesianDate,
+  resolveCodeStatus,
+} from '../utils/activationCodePdfGenerator';
 
 interface LecturerDashboardProps {
   lecturerName: string;
@@ -94,16 +108,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       durationSec: number;
       completedAt: string;
     }>;
-    accessCodes: Array<{
-      id: number;
-      pureCode?: string;
-      codeLabel: string;
-      version: number;
-      isActive: boolean;
-      activatedCount?: number;
-      createdBy: string;
-      createdAt: string;
-    }>;
+    accessCodes: Array<ActivationCodeExportItem>;
     leaderboard: LeaderboardEntry[];
     questionStats: Array<{
       questionNumber: number;
@@ -141,6 +146,13 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
   const [copiedCodeId, setCopiedCodeId] = useState<number | 'all' | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+
+  // PDF Download & Filter State
+  const [pdfFilterMode, setPdfFilterMode] = useState<PdfFilterMode>('all');
+  const [selectedCodeIds, setSelectedCodeIds] = useState<number[]>([]);
+  const [selectedBatchFilter, setSelectedBatchFilter] = useState<string>('ALL');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
   const [newUsername, setNewUsername] = useState<string>('dr.juwita');
   const [newPassword, setNewPassword] = useState<string>('');
@@ -198,6 +210,137 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       setTimeout(() => setCopiedCodeId(null), 2000);
     } catch {
       setStatusBanner(`Kode aktivasi: ${pureCode}`);
+    }
+  };
+
+  const toggleCodeSelection = (id: number) => {
+    setSelectedCodeIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const getFilteredCodesForPdf = (codes: ActivationCodeExportItem[]): {
+    filtered: ActivationCodeExportItem[];
+    description: string;
+  } => {
+    switch (pdfFilterMode) {
+      case 'available':
+        return {
+          filtered: codes.filter((c) => resolveCodeStatus(c) === 'Tersedia'),
+          description: 'Hanya Kode yang Tersedia (Belum Digunakan)',
+        };
+      case 'used':
+        return {
+          filtered: codes.filter((c) => resolveCodeStatus(c) === 'Sudah Digunakan'),
+          description: 'Hanya Kode yang Sudah Digunakan Mahasiswa',
+        };
+      case 'selected':
+        return {
+          filtered: codes.filter((c) => selectedCodeIds.includes(c.id)),
+          description: `Kode Pilihan Dosen (${selectedCodeIds.length} Kode Dipilih)`,
+        };
+      case 'batch_date': {
+        const filtered = codes.filter((c) => {
+          const batchMatch =
+            selectedBatchFilter === 'ALL' || extractBatchOrCategory(c) === selectedBatchFilter;
+          const dateMatch =
+            !selectedDateFilter ||
+            String(c.createdAt || '').slice(0, 10) === selectedDateFilter;
+          return batchMatch && dateMatch;
+        });
+        const batchLabel =
+          selectedBatchFilter === 'ALL' ? 'Semua Batch' : `Batch "${selectedBatchFilter}"`;
+        const dateLabel = selectedDateFilter ? `, Tanggal ${selectedDateFilter}` : '';
+        return {
+          filtered,
+          description: `Berdasarkan ${batchLabel}${dateLabel}`,
+        };
+      }
+      case 'all':
+      default:
+        return {
+          filtered: codes,
+          description: 'Semua Kode Aktivasi Mahasiswa',
+        };
+    }
+  };
+
+  const handleDownloadActivationCodesPdf = async () => {
+    if (isDownloadingPdf) return;
+    soundManager.playClick();
+    setIsDownloadingPdf(true);
+    setStatusBanner(null);
+    setErrorBanner(null);
+
+    try {
+      // Fetch fresh live activation codes directly from the primary database (read-only)
+      let liveCodes: ActivationCodeExportItem[] = dashData?.accessCodes || [];
+      try {
+        const res = await fetch('/api/lecturer/access-codes', { credentials: 'include' });
+        if (res.status === 401 || res.status === 403) {
+          setErrorBanner(
+            'Akses ditolak. Hanya Dosen Pengampu yang berwenang mengunduh daftar kode aktivasi.'
+          );
+          setIsDownloadingPdf(false);
+          return;
+        }
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.accessCodes)) {
+            liveCodes = json.accessCodes;
+          }
+        }
+      } catch {
+        // Fallback to already-loaded dashData.accessCodes if network hiccups
+      }
+
+      if (!liveCodes || liveCodes.length === 0) {
+        setErrorBanner(
+          'Belum ada kode aktivasi mahasiswa di database untuk diunduh. Silakan terbitkan kode terlebih dahulu.'
+        );
+        setIsDownloadingPdf(false);
+        return;
+      }
+
+      const { filtered, description } = getFilteredCodesForPdf(liveCodes);
+      if (filtered.length === 0) {
+        setErrorBanner(
+          pdfFilterMode === 'selected'
+            ? 'Silakan centang minimal 1 kode aktivasi pada daftar di bawah sebelum mengunduh PDF mode Pilihan Dosen.'
+            : `Tidak ada kode aktivasi yang cocok dengan filter "${description}".`
+        );
+        setIsDownloadingPdf(false);
+        return;
+      }
+
+      const { doc, fileName, exportedCount } = createActivationCodesPdfDocument({
+        lecturerName: lecturerName || 'dr. Juwita Ninda Suherman, M.Kes',
+        allCodes: liveCodes,
+        filteredCodes: filtered,
+        filterMode: pdfFilterMode,
+        filterDescription: description,
+        downloadDate: new Date(),
+      });
+
+      // Trigger reliable PDF download across Desktop browsers and Android Chrome/WebView
+      const pdfBlob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+
+      setStatusBanner(
+        `Dokumen PDF "${fileName}" (${exportedCount} kode aktivasi utuh) berhasil diunduh! Siap dicetak pada kertas A4 atau dibagikan kepada mahasiswa.`
+      );
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      setErrorBanner('Gagal membuat file PDF daftar kode aktivasi. Silakan coba kembali.');
+    } finally {
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -464,6 +607,14 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
               <RefreshCw className="w-3.5 h-3.5" /> Segarkan Data
             </button>
             <button
+              onClick={handleDownloadActivationCodesPdf}
+              disabled={isDownloadingPdf}
+              className="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
+            >
+              <FileDown className="w-3.5 h-3.5" />{' '}
+              {isDownloadingPdf ? 'Menyiapkan PDF...' : 'UNDUH KODE AKTIVASI (PDF)'}
+            </button>
+            <button
               onClick={handleExportCSV}
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5"
             >
@@ -668,6 +819,8 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                         <option value={10}>10 Kode Unik</option>
                         <option value={20}>20 Kode Unik</option>
                         <option value={30}>30 Kode Unik</option>
+                        <option value={50}>50 Kode Unik</option>
+                        <option value={100}>100 Kode Unik</option>
                       </select>
                       <button
                         type="button"
@@ -684,75 +837,259 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                 </div>
 
                 <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-base font-bold text-slate-900">
-                      Daftar Kode Aktivasi Unik Mahasiswa ({dashData.accessCodes.length} Kode)
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const available = dashData.accessCodes
-                          .filter((c) => c.isActive && (c.activatedCount || 0) === 0)
-                          .map((c) => c.pureCode || c.codeLabel.split('•')[0].trim());
-                        if (available.length > 0) {
-                          handleCopyPureCode(available.join('\n'), 'all');
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-semibold flex items-center gap-1.5"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      {copiedCodeId === 'all'
-                        ? 'Tersalin!'
-                        : 'Salin Semua Kode Tersedia'}
-                    </button>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        Daftar Kode Aktivasi Unik Mahasiswa ({dashData.accessCodes.length} Kode)
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Tersedia:{' '}
+                        <strong className="text-emerald-700">
+                          {
+                            dashData.accessCodes.filter((c) => resolveCodeStatus(c) === 'Tersedia')
+                              .length
+                          }
+                        </strong>{' '}
+                        • Sudah Digunakan:{' '}
+                        <strong className="text-sky-700">
+                          {
+                            dashData.accessCodes.filter(
+                              (c) => resolveCodeStatus(c) === 'Sudah Digunakan'
+                            ).length
+                          }
+                        </strong>{' '}
+                        • Dinonaktifkan:{' '}
+                        <strong className="text-rose-700">
+                          {
+                            dashData.accessCodes.filter(
+                              (c) => resolveCodeStatus(c) === 'Dinonaktifkan'
+                            ).length
+                          }
+                        </strong>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isDownloadingPdf}
+                        onClick={handleDownloadActivationCodesPdf}
+                        className="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+                      >
+                        <FileDown className="w-4 h-4" />
+                        {isDownloadingPdf ? 'MENYIAPKAN PDF...' : 'UNDUH KODE AKTIVASI (PDF)'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const available = dashData.accessCodes
+                            .filter((c) => c.isActive && (c.activatedCount || 0) === 0)
+                            .map((c) => extractPureCode(c));
+                          if (available.length > 0) {
+                            handleCopyPureCode(available.join('\n'), 'all');
+                          }
+                        }}
+                        className="px-3 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-semibold flex items-center gap-1.5"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        {copiedCodeId === 'all' ? 'Tersalin!' : 'Salin Semua Kode Tersedia'}
+                      </button>
+                    </div>
                   </div>
+
+                  {/* PDF Filter & Export Configuration Panel */}
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <Filter className="w-3.5 h-3.5 text-sky-700" />
+                        Opsi Filter Unduh Dokumen PDF (Kertas A4 Portrait Resmi)
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-600">
+                        Siap diunduh:{' '}
+                        <strong className="text-slate-900">
+                          {getFilteredCodesForPdf(dashData.accessCodes).filtered.length}
+                        </strong>{' '}
+                        dari {dashData.accessCodes.length} kode
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                      {(
+                        [
+                          { id: 'all', label: '1. Semua Kode Aktivasi' },
+                          { id: 'available', label: '2. Hanya Kode Tersedia' },
+                          { id: 'used', label: '3. Hanya Kode Sudah Digunakan' },
+                          {
+                            id: 'selected',
+                            label: `4. Pilihan Dosen (${selectedCodeIds.length})`,
+                          },
+                          { id: 'batch_date', label: '5. Berdasarkan Batch / Tanggal' },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setPdfFilterMode(opt.id)}
+                          className={`px-3 py-2 rounded-lg border text-left font-semibold transition flex items-center justify-between ${
+                            pdfFilterMode === opt.id
+                              ? 'bg-sky-900 text-white border-sky-900 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="truncate">{opt.label}</span>
+                          {pdfFilterMode === opt.id && (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-sky-300 shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    {pdfFilterMode === 'selected' && (
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 text-xs">
+                        <span className="text-slate-600 font-medium">Aksi Cepat Pilihan:</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedCodeIds(dashData.accessCodes.map((c) => c.id))
+                          }
+                          className="px-2.5 py-1 rounded bg-white hover:bg-slate-100 border border-slate-300 font-semibold text-slate-700"
+                        >
+                          Pilih Semua ({dashData.accessCodes.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedCodeIds(
+                              dashData.accessCodes
+                                .filter((c) => resolveCodeStatus(c) === 'Tersedia')
+                                .map((c) => c.id)
+                            )
+                          }
+                          className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 font-semibold text-emerald-800"
+                        >
+                          Pilih Semua yang Tersedia
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCodeIds([])}
+                          className="px-2.5 py-1 rounded bg-rose-50 hover:bg-rose-100 border border-rose-200 font-semibold text-rose-700"
+                        >
+                          Reset Pilihan
+                        </button>
+                      </div>
+                    )}
+
+                    {pdfFilterMode === 'batch_date' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 text-xs">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">
+                            Kategori / Label Batch Kode:
+                          </label>
+                          <select
+                            value={selectedBatchFilter}
+                            onChange={(e) => setSelectedBatchFilter(e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white"
+                          >
+                            <option value="ALL">Semua Batch / Kategori</option>
+                            {Array.from(
+                              new Set(
+                                dashData.accessCodes.map((c) => extractBatchOrCategory(c))
+                              )
+                            ).map((b) => (
+                              <option key={b} value={b}>
+                                {b}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">
+                            Tanggal Penerbitan (Opsional):
+                          </label>
+                          <input
+                            type="date"
+                            value={selectedDateFilter}
+                            onChange={(e) => setSelectedDateFilter(e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-mono"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                     {dashData.accessCodes.map((c) => {
-                      const isUsed = (c.activatedCount || 0) > 0;
-                      const pureCode = c.pureCode || c.codeLabel.split('•')[0].trim();
+                      const status = resolveCodeStatus(c);
+                      const isUsed = status === 'Sudah Digunakan';
+                      const pureCode = extractPureCode(c);
+                      const isSelected = selectedCodeIds.includes(c.id);
                       return (
                         <div
                           key={c.id}
-                          className="p-4 rounded-xl border border-slate-200 flex items-center justify-between gap-4"
+                          className={`p-4 rounded-xl border transition flex items-center justify-between gap-4 ${
+                            isSelected
+                              ? 'border-sky-500 bg-sky-50/40'
+                              : 'border-slate-200 bg-white'
+                          }`}
                         >
-                          <div className="space-y-1.5">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-xs font-bold">
-                                #{c.version}
-                              </span>
-                              <span className="px-2.5 py-0.5 rounded-md bg-sky-900 text-sky-100 font-mono text-sm font-bold tracking-wider">
-                                {pureCode}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyPureCode(pureCode, c.id)}
-                                className="px-2.5 py-0.5 rounded-md bg-slate-100 hover:bg-sky-100 text-slate-700 hover:text-sky-900 border border-slate-300 text-[11px] font-semibold flex items-center gap-1 transition"
-                              >
-                                <Copy className="w-3 h-3" />
-                                {copiedCodeId === c.id ? 'Disalin!' : 'Salin Kode'}
-                              </button>
-                              <span
-                                className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
-                                  isUsed
-                                    ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                          <div className="flex items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleCodeSelection(c.id)}
+                              className="mt-1 text-slate-500 hover:text-sky-700"
+                              title="Pilih kode ini untuk diunduh ke PDF"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-sky-600" />
+                              ) : (
+                                <Square className="w-4 h-4" />
+                              )}
+                            </button>
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-xs font-bold">
+                                  #{c.version}
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-md bg-sky-900 text-sky-100 font-mono text-sm font-bold tracking-wider">
+                                  {pureCode}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyPureCode(pureCode, c.id)}
+                                  className="px-2.5 py-0.5 rounded-md bg-slate-100 hover:bg-sky-100 text-slate-700 hover:text-sky-900 border border-slate-300 text-[11px] font-semibold flex items-center gap-1 transition"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                  {copiedCodeId === c.id ? 'Disalin!' : 'Salin Kode'}
+                                </button>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
+                                    isUsed
+                                      ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                                      : c.isActive
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                      : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  }`}
+                                >
+                                  {isUsed
+                                    ? 'SUDAH DIGUNAKAN (TERIKAT PERMANEN 1 NPM)'
                                     : c.isActive
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : 'bg-slate-100 text-slate-500'
-                                }`}
-                              >
-                                {isUsed
-                                  ? 'SUDAH DIGUNAKAN (TERIKAT PERMANEN 1 NPM)'
-                                  : c.isActive
-                                  ? 'TERSEDIA UNTUK 1 MAHASISWA BARU'
-                                  : 'DINONAKTIFKAN'}
-                              </span>
+                                    ? 'TERSEDIA UNTUK 1 MAHASISWA BARU'
+                                    : 'DINONAKTIFKAN'}
+                                </span>
+                              </div>
+                              <p className="text-xs font-mono text-slate-700">
+                                {c.codeLabel}
+                              </p>
+                              {isUsed && (c.usedByStudentName || c.usedByStudentNpm) && (
+                                <p className="text-xs font-semibold text-sky-900 bg-sky-50 px-2.5 py-1 rounded-md border border-sky-200 inline-block">
+                                  Mahasiswa Pengguna: {c.usedByStudentName || 'Mahasiswa ATLM'} •
+                                  NIM/NPM: <span className="font-mono">{c.usedByStudentNpm}</span>
+                                </p>
+                              )}
+                              <p className="text-[11px] text-slate-500 font-mono">
+                                Diterbitkan oleh: {c.createdBy} • Tgl:{' '}
+                                {formatIndonesianDate(c.createdAt)}
+                              </p>
                             </div>
-                            <p className="text-xs font-mono text-slate-700">
-                              {c.codeLabel}
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-mono">
-                              Diterbitkan oleh: {c.createdBy}
-                            </p>
                           </div>
                           {!isUsed && (
                             <button

@@ -1400,16 +1400,44 @@ export async function handleApiRequest(
         })),
         accessCodes: [...edgeState.accessCodes]
           .sort((a, b) => b.version - a.version)
-          .map((c) => ({
-            id: c.id,
-            pureCode: extractRawCodeFromDisplay(c.codeDisplay),
-            codeLabel: c.codeDisplay,
-            version: c.version,
-            isActive: c.isActive,
-            activatedCount: c.activatedCount,
-            createdBy: c.createdBy,
-            createdAt: c.createdAt,
-          })),
+          .map((c) => {
+            const pureCode = extractRawCodeFromDisplay(c.codeDisplay);
+            const matchedEnt = edgeState.entitlements.find(
+              (e) =>
+                e.activatedWithCodeVersion === c.version ||
+                extractRawCodeFromDisplay(e.activatedWithCodeDisplay) === pureCode
+            );
+            const isUsed = c.activatedCount > 0 || Boolean(matchedEnt);
+            const statusLabel: 'Tersedia' | 'Sudah Digunakan' | 'Dinonaktifkan' = isUsed
+              ? 'Sudah Digunakan'
+              : c.isActive
+              ? 'Tersedia'
+              : 'Dinonaktifkan';
+            const rawCategory =
+              c.className.split('[NPM:')[0].trim() || 'ATLM Reguler - IKES Rajawali';
+            const labelPart =
+              c.codeDisplay
+                .split('•')[1]
+                ?.replace(/\(Tersedia[^)]*\)/gi, '')
+                ?.replace(/Digunakan oleh NPM.*$/gi, '')
+                ?.trim() || 'Kode Aktivasi Unik Mahasiswa';
+
+            return {
+              id: c.id,
+              pureCode,
+              codeLabel: c.codeDisplay,
+              programCategory: rawCategory,
+              batchLabel: labelPart,
+              version: c.version,
+              isActive: c.isActive,
+              activatedCount: c.activatedCount,
+              statusLabel,
+              usedByStudentNpm: isUsed ? matchedEnt?.npm || null : null,
+              usedByStudentName: isUsed ? matchedEnt?.studentName || null : null,
+              createdBy: c.createdBy,
+              createdAt: c.createdAt,
+            };
+          }),
         questionStats,
       });
     }
@@ -1418,16 +1446,44 @@ export async function handleApiRequest(
       return jsonResponse({
         accessCodes: [...edgeState.accessCodes]
           .sort((a, b) => b.version - a.version)
-          .map((c) => ({
-            id: c.id,
-            pureCode: extractRawCodeFromDisplay(c.codeDisplay),
-            codeLabel: c.codeDisplay,
-            version: c.version,
-            isActive: c.isActive,
-            activatedCount: c.activatedCount,
-            createdBy: c.createdBy,
-            createdAt: c.createdAt,
-          })),
+          .map((c) => {
+            const pureCode = extractRawCodeFromDisplay(c.codeDisplay);
+            const matchedEnt = edgeState.entitlements.find(
+              (e) =>
+                e.activatedWithCodeVersion === c.version ||
+                extractRawCodeFromDisplay(e.activatedWithCodeDisplay) === pureCode
+            );
+            const isUsed = c.activatedCount > 0 || Boolean(matchedEnt);
+            const statusLabel: 'Tersedia' | 'Sudah Digunakan' | 'Dinonaktifkan' = isUsed
+              ? 'Sudah Digunakan'
+              : c.isActive
+              ? 'Tersedia'
+              : 'Dinonaktifkan';
+            const rawCategory =
+              c.className.split('[NPM:')[0].trim() || 'ATLM Reguler - IKES Rajawali';
+            const labelPart =
+              c.codeDisplay
+                .split('•')[1]
+                ?.replace(/\(Tersedia[^)]*\)/gi, '')
+                ?.replace(/Digunakan oleh NPM.*$/gi, '')
+                ?.trim() || 'Kode Aktivasi Unik Mahasiswa';
+
+            return {
+              id: c.id,
+              pureCode,
+              codeLabel: c.codeDisplay,
+              programCategory: rawCategory,
+              batchLabel: labelPart,
+              version: c.version,
+              isActive: c.isActive,
+              activatedCount: c.activatedCount,
+              statusLabel,
+              usedByStudentNpm: isUsed ? matchedEnt?.npm || null : null,
+              usedByStudentName: isUsed ? matchedEnt?.studentName || null : null,
+              createdBy: c.createdBy,
+              createdAt: c.createdAt,
+            };
+          }),
         entitlements: edgeState.entitlements,
       });
     }
@@ -1442,7 +1498,7 @@ export async function handleApiRequest(
             : 1;
 
         if (body.batchCount && Number(body.batchCount) > 0) {
-          const count = Math.min(100, Math.max(1, Number(body.batchCount)));
+          const count = Math.min(200, Math.max(1, Number(body.batchCount)));
           const generatedCodes: string[] = [];
           for (let i = 0; i < count; i++) {
             const randHex = Math.floor(1000 + Math.random() * 9000).toString(16).toUpperCase();

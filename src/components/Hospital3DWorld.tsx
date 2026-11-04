@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
@@ -21,6 +21,15 @@ import {
   X,
   UserCheck,
   Navigation,
+  Smartphone,
+  Monitor,
+  Zap,
+  ArrowUp,
+  Footprints,
+  Hand,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 
 interface Hospital3DWorldProps {
@@ -35,6 +44,8 @@ interface Hospital3DWorldProps {
   onOpenCalculator?: () => void;
   onOpenSimulation?: () => void;
 }
+
+type ControlModePreference = 'auto' | 'mobile' | 'desktop';
 
 function buildRobloxCharacter(options: {
   coatColor: string;
@@ -92,6 +103,7 @@ function buildRobloxCharacter(options: {
   const torsoGeo = new THREE.BoxGeometry(0.76, 0.92, 0.42);
   const torso = new THREE.Mesh(torsoGeo, coatMat);
   torso.position.set(0, 1.24, 0);
+  torso.name = 'torso';
   group.add(torso);
 
   const scrubShirtGeo = new THREE.BoxGeometry(0.34, 0.88, 0.44);
@@ -125,7 +137,7 @@ function buildRobloxCharacter(options: {
   group.add(rightArm);
 
   // Hands
-  const handGeo = new THREE.SphereGeometry(0.13, 12, 12);
+  const handGeo = new THREE.SphereGeometry(0.13, 10, 10);
   const leftHand = new THREE.Mesh(handGeo, skinMat);
   leftHand.position.set(-0.54, 0.8, 0);
   group.add(leftHand);
@@ -138,6 +150,7 @@ function buildRobloxCharacter(options: {
   const headGeo = new THREE.BoxGeometry(0.58, 0.58, 0.58);
   const head = new THREE.Mesh(headGeo, skinMat);
   head.position.set(0, 2.02, 0);
+  head.name = 'head';
   group.add(head);
 
   // Eyes
@@ -195,7 +208,7 @@ function buildLabInstrumentGroup(item: LabEquipmentItem): THREE.Group {
   tableTop.position.set(0, 0.9, 0);
   group.add(tableTop);
 
-  const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.9, 10);
+  const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.9, 8);
   const legPositions: [number, number][] = [
     [-1.05, -0.55],
     [1.05, -0.55],
@@ -218,7 +231,7 @@ function buildLabInstrumentGroup(item: LabEquipmentItem): THREE.Group {
     frontPanel.position.set(-0.55, 1.44, 0.02);
     group.add(frontPanel);
 
-    const sampleProbe = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 12), darkMat);
+    const sampleProbe = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 10), darkMat);
     sampleProbe.position.set(0.15, 1.25, 0.38);
     group.add(sampleProbe);
 
@@ -238,16 +251,16 @@ function buildLabInstrumentGroup(item: LabEquipmentItem): THREE.Group {
     stage.position.set(0, 1.32, 0.05);
     group.add(stage);
 
-    const eyepiece = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.35, 12), accentMat);
+    const eyepiece = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.35, 10), accentMat);
     eyepiece.rotation.x = Math.PI / 5;
     eyepiece.position.set(0, 1.78, 0.08);
     group.add(eyepiece);
   } else if (item.id === 'centrifuge') {
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.62, 0.56, 20), baseMat);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.62, 0.56, 16), baseMat);
     body.position.set(0, 1.25, 0);
     group.add(body);
 
-    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.08, 20), accentMat);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.08, 16), accentMat);
     lid.position.set(0, 1.56, 0);
     group.add(lid);
   } else if (item.id === 'blood_refrigerator' || item.id === 'reagent_cabinet') {
@@ -269,7 +282,7 @@ function buildLabInstrumentGroup(item: LabEquipmentItem): THREE.Group {
   }
 
   // Floating glowing beacon ring above station
-  const ringGeo = new THREE.TorusGeometry(0.45, 0.035, 10, 28);
+  const ringGeo = new THREE.TorusGeometry(0.45, 0.035, 10, 24);
   const ringMat = new THREE.MeshBasicMaterial({ color: item.color });
   const ring = new THREE.Mesh(ringGeo, ringMat);
   ring.rotation.x = Math.PI / 2;
@@ -307,7 +320,6 @@ function buildPatientStationGroup(stationType: 'bed' | 'chair', accentColor: str
   });
 
   if (stationType === 'bed') {
-    // Hospital Bed Frame & Mattress positioned behind/next to the patient avatar
     const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.45, 2.3), frameMat);
     bedFrame.position.set(0, 0.25, -0.75);
     group.add(bedFrame);
@@ -328,12 +340,11 @@ function buildPatientStationGroup(stationType: 'bed' | 'chair', accentColor: str
     headboard.position.set(0, 0.7, -1.88);
     group.add(headboard);
 
-    // IV Drip Stand (Tiang Infus) & Fluid Bag
-    const ivBase = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 12), ivPoleMat);
+    const ivBase = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 10), ivPoleMat);
     ivBase.position.set(1.05, 0.04, -1.2);
     group.add(ivBase);
 
-    const ivPole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 10), ivPoleMat);
+    const ivPole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 8), ivPoleMat);
     ivPole.position.set(1.05, 1.1, -1.2);
     group.add(ivPole);
 
@@ -341,7 +352,6 @@ function buildPatientStationGroup(stationType: 'bed' | 'chair', accentColor: str
     ivBag.position.set(1.05, 1.95, -1.12);
     group.add(ivBag);
   } else {
-    // Clinical Phlebotomy Chair (Kursi Pengambilan Sampel Darah Vena)
     const seat = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.16, 1.0), blanketMat);
     seat.position.set(0, 0.52, -0.45);
     group.add(seat);
@@ -359,9 +369,8 @@ function buildPatientStationGroup(stationType: 'bed' | 'chair', accentColor: str
     group.add(rightArmrest);
   }
 
-  // Patient Beacon Ring above patient
   const patientRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.48, 0.04, 10, 28),
+    new THREE.TorusGeometry(0.48, 0.04, 10, 24),
     new THREE.MeshBasicMaterial({ color: '#f59e0b' })
   );
   patientRing.rotation.x = Math.PI / 2;
@@ -374,17 +383,16 @@ function buildPatientStationGroup(stationType: 'bed' | 'chair', accentColor: str
 function build3DBloodCell(type: 'rbc' | 'wbc' | 'plt'): THREE.Group {
   const group = new THREE.Group();
   if (type === 'rbc') {
-    // Biconcave disc using torus + flattened center sphere
     const rbcMat = new THREE.MeshStandardMaterial({
       color: '#dc2626',
       roughness: 0.35,
       metalness: 0.1,
     });
-    const outerRing = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.14, 14, 28), rbcMat);
+    const outerRing = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.14, 12, 24), rbcMat);
     outerRing.rotation.x = Math.PI / 2;
     group.add(outerRing);
 
-    const centerDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.09, 20), rbcMat);
+    const centerDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.09, 16), rbcMat);
     group.add(centerDisc);
   } else if (type === 'wbc') {
     const wbcMat = new THREE.MeshStandardMaterial({
@@ -397,15 +405,14 @@ function build3DBloodCell(type: 'rbc' | 'wbc' | 'plt'): THREE.Group {
       color: '#4f46e5',
       roughness: 0.3,
     });
-    const cellBody = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 18), wbcMat);
+    const cellBody = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 14), wbcMat);
     group.add(cellBody);
 
-    // Multi-lobed nucleus inside
-    const lobe1 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), nucleusMat);
+    const lobe1 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10), nucleusMat);
     lobe1.position.set(-0.12, 0.06, 0);
     group.add(lobe1);
 
-    const lobe2 = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), nucleusMat);
+    const lobe2 = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 10), nucleusMat);
     lobe2.position.set(0.14, -0.05, 0.08);
     group.add(lobe2);
   } else {
@@ -433,46 +440,286 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
   onOpenSimulation,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const joystickBaseRef = useRef<HTMLDivElement | null>(null);
+
   const [selectedEquipment, setSelectedEquipment] = useState<LabEquipmentItem | null>(null);
   const [activeNpc, setActiveNpc] = useState<NpcCharacterData | null>(null);
   const [npcDialogueIndex, setNpcDialogueIndex] = useState(0);
   const [dialogueLang, setDialogueLang] = useState<'id' | 'en'>('id');
+
   const [nearbyTarget, setNearbyTarget] = useState<{
     type: 'equipment' | 'npc';
     label: string;
     data: LabEquipmentItem | NpcCharacterData;
   } | null>(null);
-  const [currentZone, setCurrentZone] = useState<string>('Lobby Utama & Profil Klinis IKES Rajawali');
-  const [dockCollapsed, setDockCollapsed] = useState<boolean>(false);
+  const [closestEquipmentState, setClosestEquipmentState] = useState<LabEquipmentItem | null>(null);
+  const [closestNpcState, setClosestNpcState] = useState<NpcCharacterData | null>(null);
 
-  // Refs for movement state so keyboard/mobile joystick update seamlessly
+  const [currentZone, setCurrentZone] = useState<string>(
+    'Lobby Utama & Profil Klinis IKES Rajawali'
+  );
+  const [dockCollapsed, setDockCollapsed] = useState<boolean>(true);
+  const [actionBanner, setActionBanner] = useState<string | null>(null);
+
+  // Device & Control Mode Detection (Auto-detects Android/iOS touch vs Desktop keyboard/mouse)
+  const [controlModePref, setControlModePref] = useState<ControlModePreference>('auto');
+  const [isTouchDevice, setIsTouchDevice] = useState<boolean>(false);
+  const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(false);
+  const [dismissPortraitHint, setDismissPortraitHint] = useState<boolean>(false);
+  const [isRunToggled, setIsRunToggled] = useState<boolean>(false);
+
+  // Virtual Joystick UI State (for rendering knob offset & visual tilt intensity)
+  const [joystickUi, setJoystickUi] = useState<{
+    active: boolean;
+    offsetX: number;
+    offsetY: number;
+    magnitude: number;
+  }>({ active: false, offsetX: 0, offsetY: 0, magnitude: 0 });
+
+  // Refs for real-time 60fps Three.js loop (zero React re-render overhead per frame)
   const keysRef = useRef<Record<string, boolean>>({});
+  const joystickVectorRef = useRef<{ x: number; y: number; magnitude: number }>({
+    x: 0,
+    y: 0,
+    magnitude: 0,
+  });
+  const joystickTouchIdRef = useRef<number | null>(null);
+  const isRunToggledRef = useRef<boolean>(false);
+  const actionPulseRef = useRef<number>(0);
+
   const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 8));
   const playerYawRef = useRef<number>(Math.PI);
   const cameraYawRef = useRef<number>(0);
+  const cameraPitchRef = useRef<number>(0.48); // Vertical orbit angle (clamped 0.15 to 1.15 rad)
+  const cameraDistRef = useRef<number>(6.4); // Zoom distance (clamped 3.5 to 13.5)
+
   const jumpVelocityRef = useRef<number>(0);
   const isJumpingRef = useRef<boolean>(false);
   const nearbyTargetRef = useRef<typeof nearbyTarget>(null);
+  const closestEquipmentRef = useRef<LabEquipmentItem | null>(null);
+  const closestNpcRef = useRef<NpcCharacterData | null>(null);
 
-  const teleportToZone = (x: number, z: number, zoneTitle: string) => {
-    soundManager.playDoor();
-    playerPosRef.current.set(x, 0, z);
-    setCurrentZone(zoneTitle);
-  };
+  // Sync run toggle ref
+  useEffect(() => {
+    isRunToggledRef.current = isRunToggled;
+  }, [isRunToggled]);
 
-  const triggerInteract = () => {
-    const target = nearbyTargetRef.current;
-    if (!target) return;
-    if (target.type === 'equipment') {
+  // Detect touch device & screen orientation
+  useEffect(() => {
+    const checkViewportAndTouch = () => {
+      const hasCoarsePointer =
+        typeof window !== 'undefined' &&
+        (window.matchMedia('(pointer: coarse)').matches ||
+          navigator.maxTouchPoints > 0 ||
+          window.innerWidth < 960);
+      setIsTouchDevice(hasCoarsePointer);
+      setIsPortraitMobile(window.innerWidth < 640 && window.innerHeight > window.innerWidth);
+    };
+    checkViewportAndTouch();
+    window.addEventListener('resize', checkViewportAndTouch);
+    window.addEventListener('orientationchange', checkViewportAndTouch);
+    return () => {
+      window.removeEventListener('resize', checkViewportAndTouch);
+      window.removeEventListener('orientationchange', checkViewportAndTouch);
+    };
+  }, []);
+
+  const showMobileHud =
+    controlModePref === 'mobile' || (controlModePref === 'auto' && isTouchDevice);
+
+  const showActionFeedback = useCallback((msg: string) => {
+    setActionBanner(msg);
+    window.setTimeout(() => {
+      setActionBanner((prev) => (prev === msg ? null : prev));
+    }, 2800);
+  }, []);
+
+  const teleportToZone = useCallback(
+    (x: number, z: number, zoneTitle: string) => {
+      soundManager.playDoor();
+      playerPosRef.current.set(x, 0, z);
+      setCurrentZone(zoneTitle);
+      showActionFeedback(`Berpindah ke: ${zoneTitle}`);
+    },
+    [showActionFeedback]
+  );
+
+  // 1. JUMP Action Handler
+  const handleJumpAction = useCallback(() => {
+    if (!isJumpingRef.current) {
       soundManager.playClick();
-      setSelectedEquipment(target.data as LabEquipmentItem);
+      isJumpingRef.current = true;
+      jumpVelocityRef.current = 7.2;
+    }
+  }, []);
+
+  // 2. RUN Action Handler
+  const handleToggleRun = useCallback(() => {
+    soundManager.playClick();
+    setIsRunToggled((prev) => {
+      const next = !prev;
+      showActionFeedback(next ? 'Mode Lari Cepat (Sprint) Aktif' : 'Mode Jalan Normal Aktif');
+      return next;
+    });
+  }, [showActionFeedback]);
+
+  // 3. INTERACT Action Handler (Equipment or Nearest Target)
+  const triggerInteract = useCallback(() => {
+    const target = nearbyTargetRef.current;
+    if (target) {
+      if (target.type === 'equipment') {
+        soundManager.playClick();
+        setSelectedEquipment(target.data as LabEquipmentItem);
+        setActiveNpc(null);
+        return;
+      } else {
+        soundManager.playNpcInteract();
+        const npc = target.data as NpcCharacterData;
+        setActiveNpc(npc);
+        setNpcDialogueIndex(0);
+        setSelectedEquipment(null);
+        return;
+      }
+    }
+    // If not within immediate 3.2m radius, interact with the nearest lab instrument by walking/teleporting to it
+    const eq = closestEquipmentRef.current || LAB_EQUIPMENT_3D_ITEMS[0];
+    if (eq) {
+      soundManager.playClick();
+      playerPosRef.current.set(eq.position[0], 0, eq.position[2] + 1.8);
+      setSelectedEquipment(eq);
       setActiveNpc(null);
-    } else {
+      showActionFeedback(`Membuka Inspeksi Alat: ${eq.indonesianName}`);
+    }
+  }, [showActionFeedback]);
+
+  // 4. TALK Action Handler (Dedicated NPC / Doctor / Lecturer / Patient Conversation)
+  const triggerTalkNpc = useCallback(() => {
+    const target = nearbyTargetRef.current;
+    if (target && target.type === 'npc') {
       soundManager.playNpcInteract();
       const npc = target.data as NpcCharacterData;
       setActiveNpc(npc);
       setNpcDialogueIndex(0);
       setSelectedEquipment(null);
+      return;
+    }
+    const npc = closestNpcRef.current || HOSPITAL_NPCS[0];
+    if (npc) {
+      soundManager.playNpcInteract();
+      playerPosRef.current.set(npc.position[0], 0, npc.position[2] + 1.8);
+      setCurrentZone(npc.zone);
+      setActiveNpc(npc);
+      setNpcDialogueIndex(0);
+      setSelectedEquipment(null);
+      showActionFeedback(`Berbicara dengan: ${npc.name}`);
+    }
+  }, [showActionFeedback]);
+
+  // 5. SPECIAL LAB ACTION Handler (3D Hematological Scan Pulse + Contextual Action)
+  const triggerSpecialAction = useCallback(() => {
+    soundManager.playClick();
+    actionPulseRef.current = 1.0; // Triggers 3D expanding cyan diagnostic ring around avatar
+    const target = nearbyTargetRef.current;
+    if (target?.type === 'equipment') {
+      setSelectedEquipment(target.data as LabEquipmentItem);
+      showActionFeedback(`Memindai SOP Alat Lab: ${target.label}`);
+    } else if (target?.type === 'npc') {
+      setActiveNpc(target.data as NpcCharacterData);
+      setNpcDialogueIndex(0);
+      showActionFeedback(`Memeriksa Data Klinis: ${target.label}`);
+    } else {
+      showActionFeedback(
+        'Pemindaian Hematologi 3D Aktif! Mendeteksi 10 Instrumen Lab & 6 Pasien Klinis di sekitar Anda.'
+      );
+    }
+  }, [showActionFeedback]);
+
+  // Virtual Joystick Multi-Touch Logic (Bottom-Left)
+  const updateJoystickFromPoint = useCallback((clientX: number, clientY: number) => {
+    const base = joystickBaseRef.current;
+    if (!base) return;
+    const rect = base.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const maxRadius = rect.width * 0.38;
+
+    const rawDx = clientX - centerX;
+    const rawDy = clientY - centerY;
+    const dist = Math.hypot(rawDx, rawDy);
+    const clampedDist = Math.min(dist, maxRadius);
+    const angle = Math.atan2(rawDy, rawDx);
+
+    const offsetX = Math.cos(angle) * clampedDist;
+    const offsetY = Math.sin(angle) * clampedDist;
+    const normX = maxRadius > 0 ? offsetX / maxRadius : 0;
+    const normY = maxRadius > 0 ? offsetY / maxRadius : 0;
+    const magnitude = maxRadius > 0 ? Math.min(1, dist / maxRadius) : 0;
+
+    joystickVectorRef.current = { x: normX, y: normY, magnitude };
+    setJoystickUi({
+      active: true,
+      offsetX,
+      offsetY,
+      magnitude,
+    });
+  }, []);
+
+  const resetJoystick = useCallback(() => {
+    joystickTouchIdRef.current = null;
+    joystickVectorRef.current = { x: 0, y: 0, magnitude: 0 };
+    setJoystickUi({ active: false, offsetX: 0, offsetY: 0, magnitude: 0 });
+  }, []);
+
+  const handleJoystickTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    joystickTouchIdRef.current = touch.identifier;
+    updateJoystickFromPoint(touch.clientX, touch.clientY);
+  };
+
+  const handleJoystickTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (joystickTouchIdRef.current === null) return;
+    for (let i = 0; i < e.touches.length; i++) {
+      const t = e.touches[i];
+      if (t.identifier === joystickTouchIdRef.current) {
+        updateJoystickFromPoint(t.clientX, t.clientY);
+        break;
+      }
+    }
+  };
+
+  const handleJoystickTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (joystickTouchIdRef.current === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystickTouchIdRef.current) {
+        resetJoystick();
+        break;
+      }
+    }
+  };
+
+  // Pointer fallback so desktop users testing Mobile HUD with mouse can also drag the virtual joystick
+  const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    joystickTouchIdRef.current = e.pointerId;
+    updateJoystickFromPoint(e.clientX, e.clientY);
+  };
+
+  const handleJoystickPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return;
+    if (joystickTouchIdRef.current !== e.pointerId) return;
+    updateJoystickFromPoint(e.clientX, e.clientY);
+  };
+
+  const handleJoystickPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return;
+    if (joystickTouchIdRef.current === e.pointerId) {
+      resetJoystick();
     }
   };
 
@@ -485,13 +732,16 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#273e57');
-    scene.fog = new THREE.FogExp2('#273e57', 0.015);
+    scene.fog = new THREE.FogExp2('#273e57', 0.014);
 
-    const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 160);
+    const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 140);
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({
+        antialias: window.devicePixelRatio < 2,
+        powerPreference: 'high-performance',
+      });
     } catch {
       return;
     }
@@ -500,20 +750,27 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
     const dbg = gl.getExtension('WEBGL_debug_renderer_info');
     const rendererName = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '';
     const isSoftwareGl = /SwiftShader|llvmpipe|Software|Microsoft Basic Render/i.test(rendererName);
+    const isMobileViewport = window.innerWidth < 960 || navigator.maxTouchPoints > 0;
 
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+    // Adaptive pixel ratio for smooth mobile & desktop WebGL performance
+    renderer.setPixelRatio(
+      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, isMobileViewport ? 1.5 : 2)
+    );
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
+    renderer.domElement.style.touchAction = 'none';
+    renderer.domElement.style.userSelect = 'none';
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envTexture;
     pmrem.dispose();
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight('#f8fafc', 0.78);
+    const ambientLight = new THREE.AmbientLight('#f8fafc', 0.8);
     scene.add(ambientLight);
 
     const dirLight = new THREE.DirectionalLight('#ffffff', 1.15);
@@ -543,22 +800,33 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
     labZoneFloor.position.set(0, 0.02, -3);
     scene.add(labZoneFloor);
 
-    // Hospital Walls & Glass Partitions
+    // Hospital Walls & Architectural Boundaries
     const wallMat = new THREE.MeshStandardMaterial({
       color: '#243b55',
       roughness: 0.5,
     });
-    const backWall = new THREE.Mesh(new THREE.BoxGeometry(40, 6, 0.4), wallMat);
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(48, 6, 0.4), wallMat);
     backWall.position.set(0, 3, -12);
     scene.add(backWall);
 
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 36), wallMat);
+    leftWall.position.set(-24, 3, 6);
+    scene.add(leftWall);
+
+    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 36), wallMat);
+    rightWall.position.set(24, 3, 6);
+    scene.add(rightWall);
+
     // 10 Lab Instruments in 3D
+    const clickableRoots: THREE.Object3D[] = [];
     const equipmentMeshes: { item: LabEquipmentItem; group: THREE.Group }[] = [];
     LAB_EQUIPMENT_3D_ITEMS.forEach((eqItem) => {
       const eqGroup = buildLabInstrumentGroup(eqItem);
       eqGroup.position.set(eqItem.position[0], eqItem.position[1], eqItem.position[2]);
+      eqGroup.userData = { interactType: 'equipment', item: eqItem };
       scene.add(eqGroup);
       equipmentMeshes.push({ item: eqItem, group: eqGroup });
+      clickableRoots.push(eqGroup);
     });
 
     // NPCs & 6 Clinical Patients in 3D
@@ -570,7 +838,9 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
           npc.scrubColor
         );
         stationMesh.position.set(npc.position[0], npc.position[1], npc.position[2]);
+        stationMesh.userData = { interactType: 'npc', npc };
         scene.add(stationMesh);
+        clickableRoots.push(stationMesh);
       }
 
       const npcGroup = buildRobloxCharacter({
@@ -587,27 +857,34 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         isAtlmBadge: npc.role !== 'patient',
       });
       npcGroup.position.set(npc.position[0], npc.position[1], npc.position[2]);
+      npcGroup.userData = { interactType: 'npc', npc };
       scene.add(npcGroup);
       npcMeshes.push({
         npc,
         group: npcGroup,
         basePos: new THREE.Vector3(npc.position[0], npc.position[1], npc.position[2]),
       });
+      clickableRoots.push(npcGroup);
     });
 
     // Floating 3D Red Blood Cells, White Blood Cells & Platelets in the Hospital Atrium
     const floatingCells: { group: THREE.Group; speed: number; offset: number }[] = [];
-    for (let i = 0; i < 18; i++) {
+    const cellCount = isMobileViewport ? 12 : 18;
+    for (let i = 0; i < cellCount; i++) {
       const cellType = i % 3 === 0 ? 'wbc' : i % 5 === 0 ? 'plt' : 'rbc';
       const cellGroup = build3DBloodCell(cellType);
-      const angle = (i / 18) * Math.PI * 2;
+      const angle = (i / cellCount) * Math.PI * 2;
       const radius = 9 + (i % 4) * 2.5;
-      cellGroup.position.set(Math.cos(angle) * radius, 3.2 + (i % 3) * 0.8, Math.sin(angle) * radius);
+      cellGroup.position.set(
+        Math.cos(angle) * radius,
+        3.2 + (i % 3) * 0.8,
+        Math.sin(angle) * radius
+      );
       scene.add(cellGroup);
       floatingCells.push({ group: cellGroup, speed: 0.6 + (i % 4) * 0.2, offset: i });
     }
 
-    // Playable ATLM Student Avatar (Strictly Male ATLM or Female ATLM)
+    // Playable ATLM Student Avatar (Male ATLM or Female ATLM)
     const playerAvatar = buildRobloxCharacter({
       coatColor: labCoatColor,
       scrubColor,
@@ -619,16 +896,87 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
     playerAvatar.position.copy(playerPosRef.current);
     scene.add(playerAvatar);
 
-    // Input Event Listeners
+    // 3D Diagnostic Scan Pulse Ring around Avatar (activated by ACTION button)
+    const scanPulseGeo = new THREE.RingGeometry(0.45, 0.65, 32);
+    const scanPulseMat = new THREE.MeshBasicMaterial({
+      color: '#38bdf8',
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+    });
+    const scanPulseMesh = new THREE.Mesh(scanPulseGeo, scanPulseMat);
+    scanPulseMesh.rotation.x = -Math.PI / 2;
+    scanPulseMesh.position.y = 0.06;
+    scanPulseMesh.visible = false;
+    scene.add(scanPulseMesh);
+
+    // Pre-allocated math objects for zero per-frame GC pressure
+    const raycaster = new THREE.Raycaster();
+    const pointerNdc = new THREE.Vector2();
+    const smoothCameraPos = new THREE.Vector3(
+      playerPosRef.current.x,
+      playerPosRef.current.y + 3.8,
+      playerPosRef.current.z + 6.4
+    );
+    const desiredCameraPos = new THREE.Vector3();
+    const smoothLookTarget = new THREE.Vector3(
+      playerPosRef.current.x,
+      playerPosRef.current.y + 1.6,
+      playerPosRef.current.z
+    );
+    const desiredLookTarget = new THREE.Vector3();
+
+    // Raycast helper for tapping/clicking directly on 3D NPCs or Lab Instruments
+    const trySelect3DObjectAt = (clientX: number, clientY: number) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointerNdc, camera);
+      const hits = raycaster.intersectObjects(clickableRoots, true);
+      if (hits.length > 0) {
+        let obj: THREE.Object3D | null = hits[0].object;
+        while (obj && !obj.userData?.interactType) {
+          obj = obj.parent;
+        }
+        if (obj?.userData?.interactType === 'equipment') {
+          const eq = obj.userData.item as LabEquipmentItem;
+          soundManager.playClick();
+          setSelectedEquipment(eq);
+          setActiveNpc(null);
+          return true;
+        }
+        if (obj?.userData?.interactType === 'npc') {
+          const npc = obj.userData.npc as NpcCharacterData;
+          soundManager.playNpcInteract();
+          setActiveNpc(npc);
+          setNpcDialogueIndex(0);
+          setSelectedEquipment(null);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Keyboard Input Event Listeners (Desktop)
     const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement &&
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)
+      ) {
+        return;
+      }
       const code = e.code;
       keysRef.current[code] = true;
       if (code === 'KeyE') {
         triggerInteract();
-      }
-      if (code === 'Space' && !isJumpingRef.current) {
+      } else if (code === 'KeyT') {
+        triggerTalkNpc();
+      } else if (code === 'KeyF' || code === 'KeyQ') {
+        triggerSpecialAction();
+      } else if (code === 'Space' && !isJumpingRef.current) {
+        e.preventDefault();
         isJumpingRef.current = true;
-        jumpVelocityRef.current = 6.5;
+        jumpVelocityRef.current = 7.2;
       }
     };
 
@@ -636,28 +984,173 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
       keysRef.current[e.code] = false;
     };
 
-    let isDragging = false;
+    // Mouse Orbit & Wheel Zoom (Desktop)
+    let isMouseDragging = false;
+    let mouseDownX = 0;
+    let mouseDownY = 0;
     let prevMouseX = 0;
+    let prevMouseY = 0;
+
     const onMouseDown = (e: MouseEvent) => {
-      isDragging = true;
+      isMouseDragging = true;
+      mouseDownX = e.clientX;
+      mouseDownY = e.clientY;
       prevMouseX = e.clientX;
-    };
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      const deltaX = e.clientX - prevMouseX;
-      prevMouseX = e.clientX;
-      cameraYawRef.current -= deltaX * 0.006;
-    };
-    const onMouseUp = () => {
-      isDragging = false;
+      prevMouseY = e.clientY;
     };
 
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isMouseDragging) return;
+      const deltaX = e.clientX - prevMouseX;
+      const deltaY = e.clientY - prevMouseY;
+      prevMouseX = e.clientX;
+      prevMouseY = e.clientY;
+
+      cameraYawRef.current -= deltaX * 0.0065;
+      cameraPitchRef.current = THREE.MathUtils.clamp(
+        cameraPitchRef.current + deltaY * 0.005,
+        0.15,
+        1.15
+      );
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (!isMouseDragging) return;
+      isMouseDragging = false;
+      const moveDist = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
+      if (moveDist < 6) {
+        trySelect3DObjectAt(e.clientX, e.clientY);
+      }
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      cameraDistRef.current = THREE.MathUtils.clamp(
+        cameraDistRef.current + e.deltaY * 0.006,
+        3.5,
+        13.5
+      );
+    };
+
+    // Multi-Touch 3D Camera Swipe (1-Finger Orbit) & Pinch-to-Zoom (2-Finger Zoom) on Canvas
+    let cameraTouchId: number | null = null;
+    let camTouchStartX = 0;
+    let camTouchStartY = 0;
+    let camTouchPrevX = 0;
+    let camTouchPrevY = 0;
+    let pinchPrevDist: number | null = null;
+
+    const getCanvasTouches = (touchList: TouchList): Touch[] => {
+      const arr: Touch[] = [];
+      for (let i = 0; i < touchList.length; i++) {
+        const t = touchList[i];
+        // Ignore the thumb touch that is currently operating the bottom-left virtual joystick
+        if (t.identifier !== joystickTouchIdRef.current) {
+          arr.push(t);
+        }
+      }
+      return arr;
+    };
+
+    const onCanvasTouchStart = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+      const freeTouches = getCanvasTouches(e.touches);
+      if (freeTouches.length === 1) {
+        const t = freeTouches[0];
+        cameraTouchId = t.identifier;
+        camTouchStartX = t.clientX;
+        camTouchStartY = t.clientY;
+        camTouchPrevX = t.clientX;
+        camTouchPrevY = t.clientY;
+        pinchPrevDist = null;
+      } else if (freeTouches.length >= 2) {
+        cameraTouchId = null;
+        pinchPrevDist = Math.hypot(
+          freeTouches[0].clientX - freeTouches[1].clientX,
+          freeTouches[0].clientY - freeTouches[1].clientY
+        );
+      }
+    };
+
+    const onCanvasTouchMove = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+      const freeTouches = getCanvasTouches(e.touches);
+
+      if (freeTouches.length >= 2) {
+        const dist = Math.hypot(
+          freeTouches[0].clientX - freeTouches[1].clientX,
+          freeTouches[0].clientY - freeTouches[1].clientY
+        );
+        if (pinchPrevDist !== null) {
+          const deltaPinch = pinchPrevDist - dist;
+          cameraDistRef.current = THREE.MathUtils.clamp(
+            cameraDistRef.current + deltaPinch * 0.025,
+            3.5,
+            13.5
+          );
+        }
+        pinchPrevDist = dist;
+        return;
+      }
+
+      if (freeTouches.length === 1) {
+        const t = freeTouches[0];
+        if (cameraTouchId === null) {
+          cameraTouchId = t.identifier;
+          camTouchPrevX = t.clientX;
+          camTouchPrevY = t.clientY;
+          return;
+        }
+        if (t.identifier === cameraTouchId) {
+          const dx = t.clientX - camTouchPrevX;
+          const dy = t.clientY - camTouchPrevY;
+          camTouchPrevX = t.clientX;
+          camTouchPrevY = t.clientY;
+
+          cameraYawRef.current -= dx * 0.0075;
+          cameraPitchRef.current = THREE.MathUtils.clamp(
+            cameraPitchRef.current + dy * 0.0055,
+            0.15,
+            1.15
+          );
+        }
+      }
+    };
+
+    const onCanvasTouchEnd = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const ct = e.changedTouches[i];
+        if (ct.identifier === cameraTouchId) {
+          const moved = Math.hypot(ct.clientX - camTouchStartX, ct.clientY - camTouchStartY);
+          if (moved < 10) {
+            trySelect3DObjectAt(ct.clientX, ct.clientY);
+          }
+          cameraTouchId = null;
+        }
+      }
+      const remaining = getCanvasTouches(e.touches);
+      if (remaining.length < 2) {
+        pinchPrevDist = null;
+      }
+    };
+
+    const onContextLost = (e: Event) => {
+      e.preventDefault();
+    };
+
+    const domElem = renderer.domElement;
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    const domElem = renderer.domElement;
     domElem.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+    domElem.addEventListener('wheel', onWheel, { passive: false });
+    domElem.addEventListener('touchstart', onCanvasTouchStart, { passive: false });
+    domElem.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
+    domElem.addEventListener('touchend', onCanvasTouchEnd, { passive: false });
+    domElem.addEventListener('touchcancel', onCanvasTouchEnd, { passive: false });
+    domElem.addEventListener('webglcontextlost', onContextLost, false);
 
     const handleResize = () => {
       if (!container) return;
@@ -683,33 +1176,54 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
       prevTime = now;
       const elapsed = now * 0.001;
 
-      // Player Movement (WASD / Arrow Keys + Shift Sprint)
-      const isSprinting = keysRef.current['ShiftLeft'] || keysRef.current['ShiftRight'];
-      const moveSpeed = isSprinting ? 7.5 : 4.5;
-      let moveX = 0;
-      let moveZ = 0;
+      // Combine Keyboard (WASD / Arrow Keys) + Virtual Touch Joystick Input
+      let inputX = 0;
+      let inputZ = 0;
 
-      if (keysRef.current['KeyW'] || keysRef.current['ArrowUp']) moveZ -= 1;
-      if (keysRef.current['KeyS'] || keysRef.current['ArrowDown']) moveZ += 1;
-      if (keysRef.current['KeyA'] || keysRef.current['ArrowLeft']) moveX -= 1;
-      if (keysRef.current['KeyD'] || keysRef.current['ArrowRight']) moveX += 1;
+      if (keysRef.current['KeyW'] || keysRef.current['ArrowUp']) inputZ -= 1;
+      if (keysRef.current['KeyS'] || keysRef.current['ArrowDown']) inputZ += 1;
+      if (keysRef.current['KeyA'] || keysRef.current['ArrowLeft']) inputX -= 1;
+      if (keysRef.current['KeyD'] || keysRef.current['ArrowRight']) inputX += 1;
 
-      const isMoving = moveX !== 0 || moveZ !== 0;
-      if (isMoving) {
-        const moveAngle = Math.atan2(moveX, moveZ) + cameraYawRef.current;
-        playerYawRef.current = moveAngle;
-        playerPosRef.current.x += Math.sin(moveAngle) * moveSpeed * dt;
-        playerPosRef.current.z += Math.cos(moveAngle) * moveSpeed * dt;
-
-        // Clamp within hospital bounds
-        playerPosRef.current.x = Math.max(-22, Math.min(22, playerPosRef.current.x));
-        playerPosRef.current.z = Math.max(-10, Math.min(20, playerPosRef.current.z));
+      const joy = joystickVectorRef.current;
+      if (joy.magnitude > 0.06) {
+        inputX += joy.x;
+        inputZ += joy.y;
       }
 
-      // Jump physics
+      const rawMag = Math.hypot(inputX, inputZ);
+      const normalizedMag = Math.min(1, rawMag);
+      const isSprinting =
+        keysRef.current['ShiftLeft'] ||
+        keysRef.current['ShiftRight'] ||
+        isRunToggledRef.current ||
+        joy.magnitude > 0.78;
+
+      const baseSpeed = isSprinting ? 7.8 : 4.6;
+      const effectiveSpeed = baseSpeed * (normalizedMag > 0 ? Math.max(0.35, normalizedMag) : 0);
+
+      const isMoving = normalizedMag > 0.05;
+      if (isMoving) {
+        const moveAngle = Math.atan2(inputX, inputZ) + cameraYawRef.current;
+
+        // Smooth avatar rotation toward movement heading
+        let angleDiff = moveAngle - playerYawRef.current;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        playerYawRef.current += angleDiff * Math.min(1, dt * 14);
+
+        playerPosRef.current.x += Math.sin(moveAngle) * effectiveSpeed * dt;
+        playerPosRef.current.z += Math.cos(moveAngle) * effectiveSpeed * dt;
+
+        // Clamp within hospital walls
+        playerPosRef.current.x = THREE.MathUtils.clamp(playerPosRef.current.x, -22.2, 22.2);
+        playerPosRef.current.z = THREE.MathUtils.clamp(playerPosRef.current.z, -10.4, 20.5);
+      }
+
+      // Jump physics (Gravity & Vertical Velocity)
       if (isJumpingRef.current) {
         playerPosRef.current.y += jumpVelocityRef.current * dt;
-        jumpVelocityRef.current -= 18 * dt;
+        jumpVelocityRef.current -= 19.5 * dt;
         if (playerPosRef.current.y <= 0) {
           playerPosRef.current.y = 0;
           isJumpingRef.current = false;
@@ -717,7 +1231,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         }
       }
 
-      // Update player avatar position & walking limb swing
+      // Update player avatar position & walking/running/jumping limb animation
       playerAvatar.position.copy(playerPosRef.current);
       playerAvatar.rotation.y = playerYawRef.current;
 
@@ -726,55 +1240,117 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
       const leftArm = playerAvatar.getObjectByName('leftArm');
       const rightArm = playerAvatar.getObjectByName('rightArm');
       if (leftLeg && rightLeg && leftArm && rightArm) {
-        const swing = isMoving ? Math.sin(elapsed * (isSprinting ? 12 : 8)) * 0.45 : 0;
-        leftLeg.rotation.x = swing;
-        rightLeg.rotation.x = -swing;
-        leftArm.rotation.x = -swing * 0.7;
-        rightArm.rotation.x = swing * 0.7;
+        if (isJumpingRef.current) {
+          leftLeg.rotation.x = -0.35;
+          rightLeg.rotation.x = 0.25;
+          leftArm.rotation.x = -0.85;
+          rightArm.rotation.x = -0.85;
+        } else if (isMoving) {
+          const swingFreq = isSprinting ? 13 : 8.5;
+          const swingAmp = isSprinting ? 0.58 : 0.42;
+          const swing = Math.sin(elapsed * swingFreq) * swingAmp * normalizedMag;
+          leftLeg.rotation.x = swing;
+          rightLeg.rotation.x = -swing;
+          leftArm.rotation.x = -swing * 0.75;
+          rightArm.rotation.x = swing * 0.75;
+        } else {
+          // Subtle idle breathing pose
+          leftLeg.rotation.x = THREE.MathUtils.lerp(leftLeg.rotation.x, 0, dt * 10);
+          rightLeg.rotation.x = THREE.MathUtils.lerp(rightLeg.rotation.x, 0, dt * 10);
+          leftArm.rotation.x = THREE.MathUtils.lerp(
+            leftArm.rotation.x,
+            Math.sin(elapsed * 2) * 0.03,
+            dt * 8
+          );
+          rightArm.rotation.x = THREE.MathUtils.lerp(
+            rightArm.rotation.x,
+            -Math.sin(elapsed * 2) * 0.03,
+            dt * 8
+          );
+        }
       }
 
-      // Third-person camera follow
-      const camDist = 6.2;
-      const camHeight = 3.6;
-      camera.position.set(
-        playerPosRef.current.x + Math.sin(cameraYawRef.current) * camDist,
-        playerPosRef.current.y + camHeight,
-        playerPosRef.current.z + Math.cos(cameraYawRef.current) * camDist
+      // Animate 3D Diagnostic Scan Pulse Ring when ACTION is pressed
+      if (actionPulseRef.current > 0) {
+        scanPulseMesh.visible = true;
+        actionPulseRef.current = Math.max(0, actionPulseRef.current - dt * 1.15);
+        const progress = 1 - actionPulseRef.current;
+        const scale = 1 + progress * 7.5;
+        scanPulseMesh.position.set(playerPosRef.current.x, 0.06, playerPosRef.current.z);
+        scanPulseMesh.scale.set(scale, scale, 1);
+        scanPulseMat.opacity = actionPulseRef.current * 0.85;
+      } else if (scanPulseMesh.visible) {
+        scanPulseMesh.visible = false;
+      }
+
+      // Smooth Damped Third-Person Orbit Camera with Wall/Floor Collision Clamping
+      const dist = cameraDistRef.current;
+      const pitch = cameraPitchRef.current;
+      const yaw = cameraYawRef.current;
+
+      const horizontalRadius = dist * Math.cos(pitch);
+      const verticalOffset = dist * Math.sin(pitch) + 1.45;
+
+      const rawCamX = playerPosRef.current.x + Math.sin(yaw) * horizontalRadius;
+      const rawCamY = playerPosRef.current.y + verticalOffset;
+      const rawCamZ = playerPosRef.current.z + Math.cos(yaw) * horizontalRadius;
+
+      // Clamp camera inside hospital walls so camera never clips outside the building
+      desiredCameraPos.set(
+        THREE.MathUtils.clamp(rawCamX, -23.3, 23.3),
+        Math.max(0.85, rawCamY),
+        THREE.MathUtils.clamp(rawCamZ, -11.4, 22.5)
       );
-      camera.lookAt(
+
+      desiredLookTarget.set(
         playerPosRef.current.x,
-        playerPosRef.current.y + 1.6,
+        playerPosRef.current.y + 1.65,
         playerPosRef.current.z
       );
 
+      const dampFactor = 1 - Math.exp(-12 * dt);
+      smoothCameraPos.lerp(desiredCameraPos, dampFactor);
+      smoothLookTarget.lerp(desiredLookTarget, dampFactor);
+
+      camera.position.copy(smoothCameraPos);
+      camera.lookAt(smoothLookTarget);
+
       // Animate floating 3D blood cells & beacons
-      floatingCells.forEach((fc) => {
+      for (let i = 0; i < floatingCells.length; i++) {
+        const fc = floatingCells[i];
         fc.group.rotation.y += dt * fc.speed;
         fc.group.rotation.x += dt * 0.35;
         fc.group.position.y = 3.2 + Math.sin(elapsed * fc.speed + fc.offset) * 0.35;
-      });
+      }
 
-      equipmentMeshes.forEach(({ group }) => {
-        const ring = group.getObjectByName('beaconRing');
+      for (let i = 0; i < equipmentMeshes.length; i++) {
+        const ring = equipmentMeshes[i].group.getObjectByName('beaconRing');
         if (ring) {
           ring.rotation.z = elapsed * 1.5;
         }
-      });
+      }
 
-      // Subtle idle motion for NPCs
-      npcMeshes.forEach(({ group }, idx) => {
-        group.position.y = Math.abs(Math.sin(elapsed * 1.4 + idx)) * 0.04;
-      });
+      for (let i = 0; i < npcMeshes.length; i++) {
+        npcMeshes[i].group.position.y = Math.abs(Math.sin(elapsed * 1.4 + i)) * 0.04;
+      }
 
-      // Check proximity to Lab Equipment & NPCs
-      let closest: typeof nearbyTarget = null;
-      let minDistance = 2.6;
+      // Proximity detection for Lab Equipment & NPCs
+      let closestAny: typeof nearbyTarget = null;
+      let minAnyDist = 3.1;
 
-      for (const eq of equipmentMeshes) {
+      let nearestEq: LabEquipmentItem | null = null;
+      let minEqDist = Infinity;
+
+      for (let i = 0; i < equipmentMeshes.length; i++) {
+        const eq = equipmentMeshes[i];
         const d = playerPosRef.current.distanceTo(eq.group.position);
-        if (d < minDistance) {
-          minDistance = d;
-          closest = {
+        if (d < minEqDist) {
+          minEqDist = d;
+          nearestEq = eq.item;
+        }
+        if (d < minAnyDist) {
+          minAnyDist = d;
+          closestAny = {
             type: 'equipment',
             label: eq.item.indonesianName,
             data: eq.item,
@@ -782,11 +1358,19 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         }
       }
 
-      for (const npcEntry of npcMeshes) {
+      let nearestNpc: NpcCharacterData | null = null;
+      let minNpcDist = Infinity;
+
+      for (let i = 0; i < npcMeshes.length; i++) {
+        const npcEntry = npcMeshes[i];
         const d = playerPosRef.current.distanceTo(npcEntry.group.position);
-        if (d < minDistance) {
-          minDistance = d;
-          closest = {
+        if (d < minNpcDist) {
+          minNpcDist = d;
+          nearestNpc = npcEntry.npc;
+        }
+        if (d < minAnyDist) {
+          minAnyDist = d;
+          closestAny = {
             type: 'npc',
             label: `${npcEntry.npc.name} (${npcEntry.npc.title})`,
             data: npcEntry.npc,
@@ -794,9 +1378,17 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         }
       }
 
-      if (closest?.label !== nearbyTargetRef.current?.label) {
-        nearbyTargetRef.current = closest;
-        setNearbyTarget(closest);
+      if (closestAny?.label !== nearbyTargetRef.current?.label) {
+        nearbyTargetRef.current = closestAny;
+        setNearbyTarget(closestAny);
+      }
+      if (nearestEq?.id !== closestEquipmentRef.current?.id) {
+        closestEquipmentRef.current = nearestEq;
+        setClosestEquipmentState(nearestEq);
+      }
+      if (nearestNpc?.id !== closestNpcRef.current?.id) {
+        closestNpcRef.current = nearestNpc;
+        setClosestNpcState(nearestNpc);
       }
 
       renderer.render(scene, camera);
@@ -814,106 +1406,355 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
       domElem.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+      domElem.removeEventListener('wheel', onWheel);
+      domElem.removeEventListener('touchstart', onCanvasTouchStart);
+      domElem.removeEventListener('touchmove', onCanvasTouchMove);
+      domElem.removeEventListener('touchend', onCanvasTouchEnd);
+      domElem.removeEventListener('touchcancel', onCanvasTouchEnd);
+      domElem.removeEventListener('webglcontextlost', onContextLost);
       window.removeEventListener('resize', handleResize);
+      envTexture.dispose();
       renderer.dispose();
     };
-  }, [avatarGender, labCoatColor, scrubColor, hairColor, skinTone]);
+  }, [
+    avatarGender,
+    labCoatColor,
+    scrubColor,
+    hairColor,
+    skinTone,
+    triggerInteract,
+    triggerTalkNpc,
+    triggerSpecialAction,
+  ]);
 
   return (
-    <div className="relative w-full h-[calc(100vh-4rem)] min-h-[640px] bg-slate-950 overflow-hidden select-none">
+    <div
+      className="relative w-full h-[calc(100vh-4rem)] min-h-[560px] bg-slate-950 overflow-hidden select-none"
+      style={{ touchAction: 'none', overscrollBehavior: 'none' }}
+    >
       {/* 3D WebGL Viewport (>85% unobstructed canvas) */}
       <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {/* Top Left Floating Hospital Zone & ATLM Identity Card */}
-      <div className="absolute top-4 left-4 z-10 max-w-sm bg-slate-900/80 backdrop-blur-md border border-slate-700/70 rounded-xl p-3.5 text-white shadow-xl">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300">
-            <Compass className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-mono uppercase tracking-wider text-sky-300">
-              3D HOSPITAL & HEMATOLOGY LAB
-            </p>
-            <h3 className="text-sm font-bold leading-tight">{currentZone}</h3>
-          </div>
-        </div>
-        <div className="mt-2.5 pt-2.5 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
-          <span className="flex items-center gap-1.5">
-            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-            {studentName} ({avatarGender === 'female_atlm' ? 'ATLM Wanita' : 'ATLM Pria'})
+      {/* Subtle Portrait Orientation Suggestion Banner on Narrow Mobile Screens (Non-blocking) */}
+      {isPortraitMobile && !dismissPortraitHint && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-sm bg-slate-900/90 backdrop-blur-md border border-sky-400/40 rounded-xl px-3.5 py-2 text-white text-[11px] flex items-center justify-between gap-2 shadow-lg">
+          <span className="flex items-center gap-1.5 text-sky-200">
+            <Smartphone className="w-3.5 h-3.5 text-sky-400 shrink-0 rotate-90" />
+            Tip: Mode Landscape memberikan pandangan Lab 3D lebih luas (Portrait tetap aktif).
           </span>
-          <span className="font-mono text-sky-300">NPM: {studentNpm}</span>
-        </div>
-      </div>
-
-      {/* Top Right Quick Teleport & Lab Actions */}
-      <div className="absolute top-4 right-4 z-10 flex flex-wrap gap-2">
-        <button
-          onClick={() => teleportToZone(0, 6, 'Lobby Utama & Profil dr. Juwita Ninda Suherman, M.Kes')}
-          className="px-3 py-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-xs font-medium text-white flex items-center gap-1.5 transition"
-        >
-          <Navigation className="w-3.5 h-3.5 text-sky-400" />
-          Lobby Utama
-        </button>
-        <button
-          onClick={() => teleportToZone(0, -3, 'Laboratorium Hematologi Futuristik')}
-          className="px-3 py-2 rounded-lg bg-sky-600/90 hover:bg-sky-500 backdrop-blur-md border border-sky-400/40 text-xs font-semibold text-white flex items-center gap-1.5 transition"
-        >
-          <Microscope className="w-3.5 h-3.5" />
-          Lab Hematologi
-        </button>
-        <button
-          onClick={() => teleportToZone(-2, 8, 'Bangsal Rawat Inap & Kursi Flebotomi Pasien 3D')}
-          className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow"
-        >
-          <UserCheck className="w-3.5 h-3.5" />
-          Bangsal 6 Pasien 3D
-        </button>
-        <button
-          onClick={() => teleportToZone(6, 0, 'Ruang Konsultasi Dokter Spesialis')}
-          className="px-3 py-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-xs font-medium text-white flex items-center gap-1.5 transition"
-        >
-          <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-          Ruang Dokter
-        </button>
-      </div>
-
-      {/* Proximity Action Prompt ("Press E to Interact") */}
-      {nearbyTarget && !selectedEquipment && !activeNpc && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 bg-slate-900/95 backdrop-blur-md border border-sky-400/60 rounded-xl px-5 py-3 text-white shadow-2xl flex items-center gap-3">
-          <span className="px-2.5 py-1 rounded bg-sky-500 text-slate-950 font-mono font-bold text-xs">
-            TEKAN E
-          </span>
-          <div className="text-left">
-            <p className="text-[11px] uppercase tracking-wider text-sky-300 font-mono">
-              {nearbyTarget.type === 'equipment' ? 'Inspeksi Alat Lab 3D' : 'Dialog Karakter Medis'}
-            </p>
-            <p className="text-sm font-semibold">{nearbyTarget.label}</p>
-          </div>
           <button
-            onClick={triggerInteract}
-            className="ml-2 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold"
+            type="button"
+            onClick={() => setDismissPortraitHint(true)}
+            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
           >
-            Buka
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
+      {/* Top Left Floating Hospital Zone & ATLM Identity Card (Compact on Mobile) */}
+      <div className="absolute top-3 left-3 z-10 max-w-[260px] sm:max-w-sm bg-slate-900/80 backdrop-blur-md border border-slate-700/70 rounded-xl p-2.5 sm:p-3.5 text-white shadow-xl pointer-events-auto">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 shrink-0">
+            <Compass className="w-4 h-4 sm:w-5 sm:h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-sky-300 truncate">
+              3D HOSPITAL & HEMATOLOGY LAB
+            </p>
+            <h3 className="text-xs sm:text-sm font-bold leading-tight truncate">{currentZone}</h3>
+          </div>
+        </div>
+        <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-[11px] text-slate-300">
+          <span className="flex items-center gap-1 truncate">
+            <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="truncate">{studentName}</span>
+          </span>
+          <span className="font-mono text-sky-300 shrink-0">NPM: {studentNpm}</span>
+        </div>
+      </div>
+
+      {/* Top Right Quick Teleport & Control Mode Switcher */}
+      <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1.5 max-w-[60%] sm:max-w-none pointer-events-auto">
+        <button
+          type="button"
+          onClick={() =>
+            setControlModePref((prev) =>
+              prev === 'auto' ? 'mobile' : prev === 'mobile' ? 'desktop' : 'auto'
+            )
+          }
+          className="px-2.5 py-1.5 rounded-lg bg-slate-900/85 hover:bg-slate-800 backdrop-blur-md border border-sky-400/50 text-[11px] font-mono font-semibold text-sky-200 flex items-center gap-1.5 transition shadow"
+          title="Ganti Mode Kontrol (Otomatis / Layar Sentuh HP / Keyboard Desktop)"
+        >
+          {showMobileHud ? (
+            <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+          ) : (
+            <Monitor className="w-3.5 h-3.5 text-sky-400" />
+          )}
+          <span className="hidden sm:inline">Kontrol:</span>
+          <span>
+            {controlModePref === 'auto'
+              ? showMobileHud
+                ? 'Otomatis (HP)'
+                : 'Otomatis (PC)'
+              : controlModePref === 'mobile'
+              ? 'Sentuh HP'
+              : 'Desktop'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            teleportToZone(0, 6, 'Lobby Utama & Profil dr. Juwita Ninda Suherman, M.Kes')
+          }
+          className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-[11px] font-medium text-white flex items-center gap-1 transition"
+        >
+          <Navigation className="w-3 h-3 text-sky-400" />
+          <span>Lobby</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => teleportToZone(0, -3, 'Laboratorium Hematologi Futuristik')}
+          className="px-2.5 py-1.5 rounded-lg bg-sky-600/90 hover:bg-sky-500 backdrop-blur-md border border-sky-400/40 text-[11px] font-semibold text-white flex items-center gap-1 transition"
+        >
+          <Microscope className="w-3 h-3" />
+          <span>Lab 3D</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => teleportToZone(-2, 8, 'Bangsal Rawat Inap & Kursi Flebotomi Pasien 3D')}
+          className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold flex items-center gap-1 transition shadow"
+        >
+          <UserCheck className="w-3 h-3" />
+          <span>6 Pasien</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => teleportToZone(6, 0, 'Ruang Konsultasi Dokter Spesialis')}
+          className="hidden sm:flex px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-[11px] font-medium text-white items-center gap-1 transition"
+        >
+          <MessageSquare className="w-3 h-3 text-emerald-400" />
+          <span>Ruang Dokter</span>
+        </button>
+      </div>
+
+      {/* Camera Zoom & Reset Helper Controls (Right Middle Edge) */}
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-1.5 bg-slate-900/75 backdrop-blur-md border border-slate-700/80 rounded-xl p-1.5 text-white shadow-lg pointer-events-auto">
+        <button
+          type="button"
+          onClick={() => {
+            cameraDistRef.current = THREE.MathUtils.clamp(cameraDistRef.current - 1.2, 3.5, 13.5);
+          }}
+          className="p-2 rounded-lg hover:bg-slate-800 active:scale-90 transition"
+          title="Perbesar Kamera (Zoom In)"
+        >
+          <ZoomIn className="w-4 h-4 text-sky-300" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            cameraDistRef.current = THREE.MathUtils.clamp(cameraDistRef.current + 1.2, 3.5, 13.5);
+          }}
+          className="p-2 rounded-lg hover:bg-slate-800 active:scale-90 transition"
+          title="Perkecil Kamera (Zoom Out)"
+        >
+          <ZoomOut className="w-4 h-4 text-sky-300" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            cameraYawRef.current = 0;
+            cameraPitchRef.current = 0.48;
+            cameraDistRef.current = 6.4;
+            showActionFeedback('Sudut Kamera 3D Direset');
+          }}
+          className="p-2 rounded-lg hover:bg-slate-800 active:scale-90 transition"
+          title="Reset Sudut Kamera"
+        >
+          <RotateCcw className="w-4 h-4 text-amber-300" />
+        </button>
+      </div>
+
+      {/* Action / Status Feedback Toast */}
+      {actionBanner && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 bg-slate-900/90 backdrop-blur-md border border-sky-400/50 rounded-full px-4 py-1.5 text-xs font-mono font-semibold text-sky-200 shadow-xl pointer-events-none">
+          {actionBanner}
+        </div>
+      )}
+
+      {/* Proximity Action Prompt ("Press E / Tap to Interact") */}
+      {nearbyTarget && !selectedEquipment && !activeNpc && (
+        <div className="absolute bottom-40 sm:bottom-28 left-1/2 -translate-x-1/2 z-20 bg-slate-900/95 backdrop-blur-md border border-sky-400/60 rounded-xl px-4 py-2.5 text-white shadow-2xl flex items-center gap-3 max-w-[92vw] pointer-events-auto">
+          <span className="px-2 py-1 rounded bg-sky-500 text-slate-950 font-mono font-bold text-[11px] shrink-0">
+            {showMobileHud ? 'DEKAT' : 'TEKAN E'}
+          </span>
+          <div className="text-left min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-sky-300 font-mono truncate">
+              {nearbyTarget.type === 'equipment' ? 'Inspeksi Alat Lab 3D' : 'Dialog Karakter Medis'}
+            </p>
+            <p className="text-xs sm:text-sm font-semibold truncate">{nearbyTarget.label}</p>
+          </div>
+          <button
+            type="button"
+            onClick={triggerInteract}
+            className="ml-1 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 active:scale-95 text-xs font-bold shrink-0"
+          >
+            {nearbyTarget.type === 'equipment' ? 'Inspeksi' : 'Bicara'}
+          </button>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* ROBLOX-STYLE MOBILE & ANDROID TOUCH CONTROLS HUD                      */}
+      {/* Left: Multi-Touch 360° Analog Virtual Joystick                        */}
+      {/* Right: Ergonomic Action Buttons (JUMP, RUN, INTERACT, TALK, ACTION)   */}
+      {/* ===================================================================== */}
+      {showMobileHud && !selectedEquipment && !activeNpc && (
+        <>
+          {/* LEFT: 360° Virtual Analog Joystick */}
+          <div
+            ref={joystickBaseRef}
+            onTouchStart={handleJoystickTouchStart}
+            onTouchMove={handleJoystickTouchMove}
+            onTouchEnd={handleJoystickTouchEnd}
+            onTouchCancel={handleJoystickTouchEnd}
+            onPointerDown={handleJoystickPointerDown}
+            onPointerMove={handleJoystickPointerMove}
+            onPointerUp={handleJoystickPointerUp}
+            onPointerCancel={handleJoystickPointerUp}
+            className="absolute bottom-14 left-4 sm:bottom-16 sm:left-6 z-20 w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-slate-900/45 backdrop-blur-md border-2 border-white/25 shadow-2xl flex items-center justify-center touch-none select-none pointer-events-auto"
+            style={{ touchAction: 'none' }}
+            aria-label="Virtual Joystick Penggerak Avatar 3D"
+          >
+            {/* Outer Compass Ring Markings */}
+            <div className="absolute inset-2 rounded-full border border-sky-400/25 pointer-events-none" />
+            <span className="absolute top-1.5 text-[9px] font-mono font-bold text-white/50 pointer-events-none">
+              ▲
+            </span>
+            <span className="absolute bottom-1.5 text-[9px] font-mono font-bold text-white/50 pointer-events-none">
+              ▼
+            </span>
+            <span className="absolute left-2 text-[9px] font-mono font-bold text-white/50 pointer-events-none">
+              ◀
+            </span>
+            <span className="absolute right-2 text-[9px] font-mono font-bold text-white/50 pointer-events-none">
+              ▶
+            </span>
+
+            {/* Draggable Inner Thumb Stick */}
+            <div
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-colors pointer-events-none ${
+                joystickUi.active
+                  ? joystickUi.magnitude > 0.75 || isRunToggled
+                    ? 'bg-amber-400/90 border-2 border-white text-slate-950'
+                    : 'bg-sky-400/90 border-2 border-white text-slate-950'
+                  : 'bg-white/75 border border-white text-slate-900'
+              }`}
+              style={{
+                transform: `translate3d(${joystickUi.offsetX}px, ${joystickUi.offsetY}px, 0)`,
+              }}
+            >
+              <Compass className="w-5 h-5 opacity-80" />
+            </div>
+          </div>
+
+          {/* RIGHT: Ergonomic 5-Button Action Pad (JUMP, RUN, INTERACT, TALK, ACTION) */}
+          <div
+            className="absolute bottom-14 right-4 sm:bottom-16 sm:right-6 z-20 flex flex-col items-end gap-2.5 pointer-events-auto select-none"
+            style={{ touchAction: 'none' }}
+          >
+            {/* Top Row: TALK (NPC/Patient) & INTERACT (Lab Equipment) */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={triggerTalkNpc}
+                className={`min-w-[54px] h-12 px-3 rounded-2xl backdrop-blur-md border font-mono text-[10px] font-bold flex flex-col items-center justify-center gap-0.5 shadow-xl active:scale-90 transition ${
+                  nearbyTarget?.type === 'npc'
+                    ? 'bg-amber-400 text-slate-950 border-white animate-pulse'
+                    : 'bg-slate-900/75 text-amber-200 border-amber-400/50 hover:bg-slate-800'
+                }`}
+                title="Bicara dengan Dosen / Dokter / Analis / Pasien 3D Terdekat"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>TALK</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={triggerInteract}
+                className={`min-w-[60px] h-12 px-3 rounded-2xl backdrop-blur-md border font-mono text-[10px] font-bold flex flex-col items-center justify-center gap-0.5 shadow-xl active:scale-90 transition ${
+                  nearbyTarget?.type === 'equipment'
+                    ? 'bg-sky-400 text-slate-950 border-white animate-pulse'
+                    : 'bg-slate-900/75 text-sky-200 border-sky-400/50 hover:bg-slate-800'
+                }`}
+                title="Inspeksi Alat Laboratorium 3D Terdekat"
+              >
+                <Hand className="w-4 h-4" />
+                <span>INTERACT</span>
+              </button>
+            </div>
+
+            {/* Bottom Row: ACTION (Scan), RUN (Sprint Toggle), JUMP (Primary Jump) */}
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={triggerSpecialAction}
+                className="w-12 h-12 rounded-full bg-indigo-600/80 hover:bg-indigo-500 backdrop-blur-md border border-indigo-300/60 text-white font-mono text-[9px] font-bold flex flex-col items-center justify-center gap-0.5 shadow-xl active:scale-90 transition"
+                title="Aksi Khusus Pemindaian Laboratorium Hematologi"
+              >
+                <Zap className="w-4 h-4 text-indigo-200" />
+                <span>ACTION</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleRun}
+                className={`w-13 h-13 min-w-[52px] min-h-[52px] rounded-full backdrop-blur-md border-2 font-mono text-[10px] font-bold flex flex-col items-center justify-center gap-0.5 shadow-xl active:scale-90 transition ${
+                  isRunToggled
+                    ? 'bg-emerald-500 text-slate-950 border-white'
+                    : 'bg-slate-900/75 text-emerald-300 border-emerald-400/50 hover:bg-slate-800'
+                }`}
+                title="Aktifkan / Nonaktifkan Lari Cepat (Sprint)"
+              >
+                <Footprints className="w-4 h-4" />
+                <span>RUN</span>
+              </button>
+
+              <button
+                type="button"
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  handleJumpAction();
+                }}
+                onClick={handleJumpAction}
+                className="w-16 h-16 rounded-full bg-sky-500/90 hover:bg-sky-400 active:bg-sky-300 backdrop-blur-md border-2 border-white text-slate-950 font-mono text-xs font-extrabold flex flex-col items-center justify-center gap-0.5 shadow-2xl active:scale-90 transition"
+                title="Lompat (Jump)"
+              >
+                <ArrowUp className="w-5 h-5 stroke-[2.5]" />
+                <span>JUMP</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Interactive 3D Lab Equipment Modal */}
       {selectedEquipment && (
-        <div className="absolute inset-0 z-30 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[88vh] overflow-y-auto">
+        <div className="absolute inset-0 z-30 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[88vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
               <div>
                 <span className="text-xs font-mono uppercase tracking-wider text-sky-700 font-semibold">
                   {selectedEquipment.category} • PDF Hal. {selectedEquipment.pdfPageRef}
                 </span>
-                <h3 className="text-xl font-bold text-slate-900 mt-0.5">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 mt-0.5">
                   {selectedEquipment.indonesianName}
                 </h3>
                 <p className="text-xs text-slate-500">{selectedEquipment.name}</p>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedEquipment(null)}
                 className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               >
@@ -933,7 +1774,9 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                 <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider mb-1">
                   Prinsip Kerja Instrumen
                 </h4>
-                <p className="text-slate-600 leading-relaxed">{selectedEquipment.operatingPrinciple}</p>
+                <p className="text-slate-600 leading-relaxed">
+                  {selectedEquipment.operatingPrinciple}
+                </p>
               </div>
 
               <div>
@@ -961,9 +1804,10 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
             </div>
 
             <div className="mt-6 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {onOpenCalculator && (
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedEquipment(null);
                       onOpenCalculator();
@@ -975,6 +1819,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                 )}
                 {onOpenSimulation && (
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedEquipment(null);
                       onOpenSimulation();
@@ -986,6 +1831,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                 )}
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedEquipment(null)}
                 className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
               >
@@ -998,7 +1844,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
 
       {/* Interactive NPC & 3D Patient Clinical Card Modal */}
       {activeNpc && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 max-w-2xl w-[94%] max-h-[75vh] overflow-y-auto bg-[#243b55]/95 backdrop-blur-md border border-sky-300/50 rounded-2xl p-5 text-white shadow-2xl">
+        <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-30 max-w-2xl w-[94%] max-h-[75vh] overflow-y-auto bg-[#243b55]/95 backdrop-blur-md border border-sky-300/50 rounded-2xl p-4 sm:p-5 text-white shadow-2xl pointer-events-auto">
           <div className="flex items-start justify-between gap-3">
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-amber-300 font-bold">
@@ -1011,12 +1857,14 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
             </div>
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={() => setDialogueLang(dialogueLang === 'id' ? 'en' : 'id')}
                 className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono text-sky-200 border border-[#4a6c94]"
               >
                 {dialogueLang === 'id' ? 'ID → EN' : 'EN → ID'}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const text =
                     dialogueLang === 'id'
@@ -1030,6 +1878,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                 <Volume2 className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setActiveNpc(null)}
                 className="p-1.5 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-slate-200"
               >
@@ -1054,7 +1903,9 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                   <p className="font-mono font-bold text-[11px] uppercase text-sky-900">
                     Anamnesis & Pemeriksaan Fisik:
                   </p>
-                  <p className="mt-0.5 leading-relaxed">{activeNpc.patientClinicalCard.anamnesis}</p>
+                  <p className="mt-0.5 leading-relaxed">
+                    {activeNpc.patientClinicalCard.anamnesis}
+                  </p>
                   <p className="mt-1 text-slate-700 leading-relaxed">
                     <strong>Fisik:</strong> {activeNpc.patientClinicalCard.physicalExam}
                   </p>
@@ -1067,7 +1918,8 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
                     {activeNpc.patientClinicalCard.cbcAndIndices}
                   </p>
                   <p className="mt-1 text-slate-700 leading-relaxed">
-                    <strong>Apusan Darah Tepi:</strong> {activeNpc.patientClinicalCard.smearMorphology}
+                    <strong>Apusan Darah Tepi:</strong>{' '}
+                    {activeNpc.patientClinicalCard.smearMorphology}
                   </p>
                 </div>
               </div>
@@ -1092,6 +1944,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
             </span>
             <div className="flex flex-wrap gap-2">
               <button
+                type="button"
                 onClick={() =>
                   setNpcDialogueIndex((prev) => (prev + 1) % activeNpc.dialogues.length)
                 }
@@ -1101,6 +1954,7 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
               </button>
               {onStartQuiz && (
                 <button
+                  type="button"
                   onClick={() => {
                     setActiveNpc(null);
                     onStartQuiz();
@@ -1115,52 +1969,52 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         </div>
       )}
 
-      {/* Collapsible Bottom Control Dock (Mobile Touch Pads + 6 Patients Selector + Lab Instruments) */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 w-[96%] max-w-5xl bg-[#243b55]/90 backdrop-blur-md border border-[#45678e] rounded-xl px-4 py-2.5 text-white shadow-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 text-xs">
-            <span className="font-mono text-sky-300 font-semibold flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> KONTROL AVATAR ATLM & PASIEN 3D
-            </span>
-            <span className="hidden md:inline text-slate-200">
-              <strong className="text-white font-mono">WASD</strong> Jalan •{' '}
-              <strong className="text-white font-mono">Shift</strong> Lari •{' '}
-              <strong className="text-white font-mono">Space</strong> Lompat •{' '}
-              <strong className="text-white font-mono">E</strong> Interaksi Pasien/Alat
+      {/* Collapsible Bottom Control Dock (Quick Access to 6 3D Patients & 10 Lab Instruments) */}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 w-[96%] max-w-4xl bg-[#243b55]/90 backdrop-blur-md border border-[#45678e] rounded-xl px-3.5 py-2 text-white shadow-xl pointer-events-auto">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 text-[11px] sm:text-xs min-w-0">
+            <span className="font-mono text-sky-300 font-semibold flex items-center gap-1.5 truncate">
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              {showMobileHud
+                ? 'JOYSTICK KIRI: Gerak 360° • GESER LAYAR: Kamera 3D • TOMBOL KANAN: Aksi'
+                : 'WASD/Panah: Jalan • Shift: Lari • Space: Lompat • E: Interaksi • Geser: Kamera'}
             </span>
           </div>
           <button
+            type="button"
             onClick={() => setDockCollapsed(!dockCollapsed)}
-            className="text-xs text-slate-200 hover:text-white flex items-center gap-1 font-mono"
+            className="text-[11px] sm:text-xs text-sky-200 hover:text-white flex items-center gap-1 font-mono shrink-0 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-sky-400/30"
           >
             {dockCollapsed ? (
               <>
-                Tampilkan Pasien & Alat 3D <ChevronUp className="w-4 h-4" />
+                Daftar Pasien & Alat 3D <ChevronUp className="w-3.5 h-3.5" />
               </>
             ) : (
               <>
-                Sembunyikan <ChevronDown className="w-4 h-4" />
+                Tutup <ChevronDown className="w-3.5 h-3.5" />
               </>
             )}
           </button>
         </div>
 
         {!dockCollapsed && (
-          <div className="mt-2.5 pt-2.5 border-t border-[#3a5778] space-y-2">
+          <div className="mt-2.5 pt-2.5 border-t border-[#3a5778] space-y-2 max-h-40 overflow-y-auto">
             {/* Row 1: Direct Clickable 6 Clinical Patients in 3D */}
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] font-mono font-bold text-amber-300 mr-1">
-                PASIEN 3D:
+                6 PASIEN 3D:
               </span>
               {HOSPITAL_NPCS.filter((n) => n.role === 'patient').map((pat) => (
                 <button
                   key={pat.id}
+                  type="button"
                   onClick={() => {
                     soundManager.playNpcInteract();
                     teleportToZone(pat.position[0], pat.position[2] + 1.8, pat.zone);
                     setActiveNpc(pat);
                     setNpcDialogueIndex(0);
                     setSelectedEquipment(null);
+                    setDockCollapsed(true);
                   }}
                   className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/35 border border-amber-300/50 text-[11px] font-semibold text-amber-100 flex items-center gap-1 transition"
                 >
@@ -1170,54 +2024,26 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
               ))}
             </div>
 
-            {/* Row 2: D-Pad + Lab Equipment Selector */}
+            {/* Row 2: Lab Equipment & Medical Staff Selector */}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <button
-                  onMouseDown={() => (keysRef.current['KeyW'] = true)}
-                  onMouseUp={() => (keysRef.current['KeyW'] = false)}
-                  onTouchStart={() => (keysRef.current['KeyW'] = true)}
-                  onTouchEnd={() => (keysRef.current['KeyW'] = false)}
-                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
-                >
-                  ▲ Maju
-                </button>
-                <button
-                  onMouseDown={() => (keysRef.current['KeyS'] = true)}
-                  onMouseUp={() => (keysRef.current['KeyS'] = false)}
-                  onTouchStart={() => (keysRef.current['KeyS'] = true)}
-                  onTouchEnd={() => (keysRef.current['KeyS'] = false)}
-                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
-                >
-                  ▼ Mundur
-                </button>
-                <button
-                  onMouseDown={() => (keysRef.current['KeyA'] = true)}
-                  onMouseUp={() => (keysRef.current['KeyA'] = false)}
-                  onTouchStart={() => (keysRef.current['KeyA'] = true)}
-                  onTouchEnd={() => (keysRef.current['KeyA'] = false)}
-                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
-                >
-                  ◀ Kiri
-                </button>
-                <button
-                  onMouseDown={() => (keysRef.current['KeyD'] = true)}
-                  onMouseUp={() => (keysRef.current['KeyD'] = false)}
-                  onTouchStart={() => (keysRef.current['KeyD'] = true)}
-                  onTouchEnd={() => (keysRef.current['KeyD'] = false)}
-                  className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono border border-[#4a6c94]"
-                >
-                  Kanan ▶
-                </button>
-              </div>
-
               <div className="flex flex-wrap items-center gap-1.5">
-                {LAB_EQUIPMENT_3D_ITEMS.slice(0, 5).map((eq) => (
+                <span className="text-[11px] font-mono font-bold text-sky-300 mr-1">
+                  10 ALAT LAB 3D:
+                </span>
+                {LAB_EQUIPMENT_3D_ITEMS.map((eq) => (
                   <button
                     key={eq.id}
+                    type="button"
                     onClick={() => {
                       soundManager.playClick();
+                      teleportToZone(
+                        eq.position[0],
+                        eq.position[2] + 1.8,
+                        'Laboratorium Hematologi Futuristik'
+                      );
                       setSelectedEquipment(eq);
+                      setActiveNpc(null);
+                      setDockCollapsed(true);
                     }}
                     className="px-2.5 py-1 rounded bg-[#1d3249] hover:bg-[#274360] border border-sky-400/40 text-[11px] text-sky-200 flex items-center gap-1"
                   >
