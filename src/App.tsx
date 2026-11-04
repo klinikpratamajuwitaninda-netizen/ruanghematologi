@@ -230,6 +230,7 @@ export default function App() {
   const [formGender, setFormGender] = useState<'male_atlm' | 'female_atlm'>('female_atlm');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState<boolean>(false);
 
   // Lecturer Login Form (No hardcoded secrets in frontend)
   const [lecturerBootstrapCode, setLecturerBootstrapCode] = useState<string>('');
@@ -323,8 +324,10 @@ export default function App() {
 
   const handleStudentActivate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAuthSubmitting) return;
     setAuthError(null);
     setAuthSuccess(null);
+    setIsAuthSubmitting(true);
     soundManager.playClick();
 
     try {
@@ -366,9 +369,11 @@ export default function App() {
       setTimeout(() => {
         setShowAuthModal(null);
         setAuthSuccess(null);
-      }, 700);
+      }, 650);
     } catch {
       setAuthError('Gagal menghubungi server autentikasi.');
+    } finally {
+      setIsAuthSubmitting(false);
     }
   };
 
@@ -407,7 +412,9 @@ export default function App() {
 
   const handleLecturerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAuthSubmitting) return;
     setAuthError(null);
+    setIsAuthSubmitting(true);
     soundManager.playClick();
 
     try {
@@ -437,6 +444,8 @@ export default function App() {
       setShowAuthModal(null);
     } catch {
       setAuthError('Gagal memproses login dosen.');
+    } finally {
+      setIsAuthSubmitting(false);
     }
   };
 
@@ -2161,9 +2170,12 @@ export default function App() {
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow"
+                    disabled={isAuthSubmitting}
+                    className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white font-bold text-xs shadow"
                   >
-                    {studentAuthTab === 'activate'
+                    {isAuthSubmitting
+                      ? 'Memproses Autentikasi...'
+                      : studentAuthTab === 'activate'
                       ? 'Aktifkan Kode Unik & Masuk Permanen'
                       : 'Masuk dengan NPM Terdaftar'}
                   </button>
@@ -2261,9 +2273,12 @@ export default function App() {
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs"
+                    disabled={isAuthSubmitting}
+                    className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold text-xs"
                   >
-                    Verifikasi & Masuk ke Portal Dosen
+                    {isAuthSubmitting
+                      ? 'Memverifikasi Kredensial...'
+                      : 'Verifikasi & Masuk ke Portal Dosen'}
                   </button>
                 </form>
 

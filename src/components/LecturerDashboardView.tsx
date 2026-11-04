@@ -26,6 +26,7 @@ import {
   Unlock,
   RefreshCw,
   Sparkles,
+  Copy,
 } from 'lucide-react';
 
 interface LecturerDashboardProps {
@@ -95,6 +96,7 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
     }>;
     accessCodes: Array<{
       id: number;
+      pureCode?: string;
       codeLabel: string;
       version: number;
       isActive: boolean;
@@ -134,7 +136,9 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
   // Forms state
   const [newAccessCode, setNewAccessCode] = useState<string>('');
   const [newCodeLabel, setNewCodeLabel] = useState<string>('');
-  const [batchCount, setBatchCount] = useState<number>(5);
+  const [batchCount, setBatchCount] = useState<number>(20);
+  const [isSubmittingCode, setIsSubmittingCode] = useState<boolean>(false);
+  const [copiedCodeId, setCopiedCodeId] = useState<number | 'all' | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
@@ -181,10 +185,27 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
     fetchDashboard();
   }, []);
 
+  const handleCopyPureCode = async (pureCode: string, id: number | 'all') => {
+    soundManager.playClick();
+    try {
+      await navigator.clipboard.writeText(pureCode);
+      setCopiedCodeId(id);
+      setStatusBanner(
+        id === 'all'
+          ? 'Seluruh kode aktivasi yang tersedia berhasil disalin ke clipboard!'
+          : `Kode aktivasi "${pureCode}" berhasil disalin! Silakan bagikan ke mahasiswa.`
+      );
+      setTimeout(() => setCopiedCodeId(null), 2000);
+    } catch {
+      setStatusBanner(`Kode aktivasi: ${pureCode}`);
+    }
+  };
+
   const handleCreateAccessCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAccessCode.trim()) return;
+    if (!newAccessCode.trim() || isSubmittingCode) return;
     soundManager.playClick();
+    setIsSubmittingCode(true);
     setStatusBanner(null);
     setErrorBanner(null);
     try {
@@ -202,17 +223,21 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
         setStatusBanner(data.message);
         setNewAccessCode('');
         setNewCodeLabel('');
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         setErrorBanner(data.error || 'Gagal menerbitkan kode aktivasi.');
       }
     } catch {
       setErrorBanner('Gagal menghubungi server.');
+    } finally {
+      setIsSubmittingCode(false);
     }
   };
 
   const handleGenerateBatchCodes = async () => {
+    if (isSubmittingCode) return;
     soundManager.playClick();
+    setIsSubmittingCode(true);
     setStatusBanner(null);
     setErrorBanner(null);
     try {
@@ -228,12 +253,14 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
       const data = await res.json();
       if (res.ok && data.success) {
         setStatusBanner(data.message);
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         setErrorBanner(data.error || 'Gagal menerbitkan batch kode aktivasi.');
       }
     } catch {
       setErrorBanner('Gagal menghubungi server.');
+    } finally {
+      setIsSubmittingCode(false);
     }
   };
 
@@ -613,9 +640,11 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                       </div>
                       <button
                         type="submit"
-                        className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5"
+                        disabled={isSubmittingCode}
+                        className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white font-semibold text-xs flex items-center justify-center gap-1.5"
                       >
-                        <Plus className="w-4 h-4" /> Terbitkan 1 Kode Aktivasi Unik
+                        <Plus className="w-4 h-4" />{' '}
+                        {isSubmittingCode ? 'Menerbitkan...' : 'Terbitkan 1 Kode Aktivasi Unik'}
                       </button>
                     </form>
                   </div>
@@ -638,35 +667,70 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                         <option value={5}>5 Kode Unik</option>
                         <option value={10}>10 Kode Unik</option>
                         <option value={20}>20 Kode Unik</option>
+                        <option value={30}>30 Kode Unik</option>
                       </select>
                       <button
                         type="button"
+                        disabled={isSubmittingCode}
                         onClick={handleGenerateBatchCodes}
-                        className="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold"
+                        className="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white text-xs font-semibold"
                       >
-                        + Generate {batchCount} Kode Unik
+                        {isSubmittingCode
+                          ? 'Membuat Kode...'
+                          : `+ Generate ${batchCount} Kode Unik`}
                       </button>
                     </div>
                   </div>
                 </div>
 
                 <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-                  <h3 className="text-base font-bold text-slate-900">
-                    Daftar Kode Aktivasi Unik Mahasiswa ({dashData.accessCodes.length} Kode)
-                  </h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-base font-bold text-slate-900">
+                      Daftar Kode Aktivasi Unik Mahasiswa ({dashData.accessCodes.length} Kode)
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const available = dashData.accessCodes
+                          .filter((c) => c.isActive && (c.activatedCount || 0) === 0)
+                          .map((c) => c.pureCode || c.codeLabel.split('•')[0].trim());
+                        if (available.length > 0) {
+                          handleCopyPureCode(available.join('\n'), 'all');
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-semibold flex items-center gap-1.5"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      {copiedCodeId === 'all'
+                        ? 'Tersalin!'
+                        : 'Salin Semua Kode Tersedia'}
+                    </button>
+                  </div>
                   <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                     {dashData.accessCodes.map((c) => {
                       const isUsed = (c.activatedCount || 0) > 0;
+                      const pureCode = c.pureCode || c.codeLabel.split('•')[0].trim();
                       return (
                         <div
                           key={c.id}
                           className="p-4 rounded-xl border border-slate-200 flex items-center justify-between gap-4"
                         >
-                          <div>
+                          <div className="space-y-1.5">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-xs font-bold">
                                 #{c.version}
                               </span>
+                              <span className="px-2.5 py-0.5 rounded-md bg-sky-900 text-sky-100 font-mono text-sm font-bold tracking-wider">
+                                {pureCode}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyPureCode(pureCode, c.id)}
+                                className="px-2.5 py-0.5 rounded-md bg-slate-100 hover:bg-sky-100 text-slate-700 hover:text-sky-900 border border-slate-300 text-[11px] font-semibold flex items-center gap-1 transition"
+                              >
+                                <Copy className="w-3 h-3" />
+                                {copiedCodeId === c.id ? 'Disalin!' : 'Salin Kode'}
+                              </button>
                               <span
                                 className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
                                   isUsed
@@ -683,10 +747,10 @@ export const LecturerDashboardView: React.FC<LecturerDashboardProps> = ({
                                   : 'DINONAKTIFKAN'}
                               </span>
                             </div>
-                            <p className="text-sm font-mono font-bold text-slate-900 mt-1.5">
+                            <p className="text-xs font-mono text-slate-700">
                               {c.codeLabel}
                             </p>
-                            <p className="text-xs text-slate-500 font-mono">
+                            <p className="text-[11px] text-slate-500 font-mono">
                               Diterbitkan oleh: {c.createdBy}
                             </p>
                           </div>

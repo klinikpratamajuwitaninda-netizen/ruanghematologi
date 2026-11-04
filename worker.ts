@@ -153,6 +153,53 @@ function maskNpm(npm: string): string {
   return clean.slice(0, 4) + '***' + clean.slice(-2);
 }
 
+function normalizeActivationCode(rawInput: unknown): string {
+  if (rawInput === null || rawInput === undefined) return '';
+  let str = String(rawInput)
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ')
+    .trim();
+  if (str.includes('•')) {
+    str = str.split('•')[0].trim();
+  }
+  if (str.includes('(')) {
+    str = str.split('(')[0].trim();
+  }
+  str = str.replace(/^#\d+\s*/, '').trim();
+  str = str.replace(/[\u2010-\u2015\u2212]/g, '-');
+  str = str.replace(/\s+/g, '');
+  str = str.replace(/^["'`]+|["'`]+$/g, '');
+  return str.toUpperCase();
+}
+
+function normalizeNpm(rawInput: unknown): string {
+  if (rawInput === null || rawInput === undefined) return '';
+  return String(rawInput)
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
+    .trim()
+    .replace(/\s+/g, '')
+    .toUpperCase();
+}
+
+function extractRawCodeFromDisplay(codeDisplay: string): string {
+  return normalizeActivationCode(String(codeDisplay || '').split('•')[0]);
+}
+
+const workerLocks = new Map<string, Promise<unknown>>();
+async function withWorkerLock<T>(lockName: string, fn: () => Promise<T>): Promise<T> {
+  const prev = workerLocks.get(lockName) || Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  workerLocks.set(lockName, prev.then(() => current));
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 // ============================================================================
 // RATE LIMITING IN WORKER MEMORY
 // ============================================================================
@@ -163,11 +210,14 @@ const workerRateMap = new Map<
 const RATE_WINDOW_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
-function getWorkerClientKey(req: Request, scope: string): string {
+function getWorkerClientKey(req: Request, scope: string, extraKey?: string): string {
   const ip =
     req.headers.get('CF-Connecting-IP') ||
     req.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
     'edge';
+  if (extraKey) {
+    return `${scope}:${ip}:${extraKey}`;
+  }
   return `${scope}:${ip}`;
 }
 
@@ -185,7 +235,7 @@ function checkWorkerRate(key: string): { allowed: boolean; retryAfterSec: number
   return { allowed: true, retryAfterSec: 0 };
 }
 
-function recordWorkerFailure(key: string): void {
+function recordWorkerFailure(key: string, maxLimit = MAX_ATTEMPTS): void {
   const now = Date.now();
   const entry = workerRateMap.get(key);
   if (!entry || now - entry.firstAttemptAt > RATE_WINDOW_MS) {
@@ -193,7 +243,7 @@ function recordWorkerFailure(key: string): void {
     return;
   }
   entry.attempts += 1;
-  if (entry.attempts >= MAX_ATTEMPTS) {
+  if (entry.attempts >= maxLimit) {
     entry.blockedUntil = now + RATE_WINDOW_MS;
   }
 }
@@ -281,126 +331,157 @@ const edgeState = {
   glossary: [...GLOSSARY_TERMS],
 };
 
-async function ensureEdgeStateSeeded(env: CloudflareEnv): Promise<void> {
-  if (edgeState.initialized) return;
+async function syncEdgeStateIntegrity(): Promise<void> {
+  // Ensure every accessCode has canonical codeHash matching its pureCode
+  for (const c of edgeState.accessCodes) {
+    const pure = extractRawCodeFromDisplay(c.codeDisplay);
+    if (pure.length >= 3) {
+      const expected = await sha256Hex(pure);
+      if (c.codeHash !== expected) {
+        c.codeHash = expected;
+      }
+    }
+  }
+  // Ensure every entitlement has a corresponding profile
+  for (const e of edgeState.entitlements) {
+    const clean = normalizeNpm(e.npm);
+    e.npm = clean;
+    if (!edgeState.profiles.has(clean)) {
+      edgeState.profiles.set(clean, {
+        npm: clean,
+        fullName: e.studentName,
+        className: e.className || 'ATLM Reguler - IKES Rajawali',
+        level: 1,
+        xp: 100,
+        highestScore: 0,
+        averageScore: 0,
+        quizCount: 0,
+        completedModules: [],
+        avatarGender: 'female_atlm',
+        skinTone: '#f1c27d',
+        hairStyle: 'modern',
+        shoeColor: '#0f172a',
+      });
+    }
+  }
+}
 
+async function ensureEdgeStateSeeded(env: CloudflareEnv): Promise<void> {
   if (env.TEACHER_ACCESS_CODE?.trim()) {
     edgeState.lecturer.passwordHash = await sha256Hex(env.TEACHER_ACCESS_CODE.trim());
   }
 
-  const seedCodes = [
-    { code: 'ATLM-IKES-001', version: 1, npm: '24011001', name: 'Aulia Rahma Putri' },
-    { code: 'ATLM-IKES-002', version: 2, npm: '24011014', name: 'Muhammad Farhan Pratama' },
-    { code: 'ATLM-IKES-003', version: 3, npm: '24011028', name: 'Siti Nabila Azzahra' },
-    { code: 'ATLM-IKES-004', version: 4, npm: null, name: null },
-    { code: 'ATLM-IKES-005', version: 5, npm: null, name: null },
-    { code: 'ATLM-IKES-006', version: 6, npm: null, name: null },
-    { code: 'ATLM-IKES-007', version: 7, npm: null, name: null },
-    { code: 'ATLM-IKES-008', version: 8, npm: null, name: null },
-    { code: 'ATLM-IKES-009', version: 9, npm: null, name: null },
-    { code: 'ATLM-IKES-010', version: 10, npm: null, name: null },
-    { code: 'ATLM-IKES-011', version: 11, npm: null, name: null },
-    { code: 'ATLM-IKES-012', version: 12, npm: null, name: null },
-  ];
+  if (!edgeState.initialized) {
+    const seedCodes = [
+      { code: 'ATLM-IKES-001', version: 1, npm: '24011001', name: 'Aulia Rahma Putri' },
+      { code: 'ATLM-IKES-002', version: 2, npm: '24011014', name: 'Muhammad Farhan Pratama' },
+      { code: 'ATLM-IKES-003', version: 3, npm: '24011028', name: 'Siti Nabila Azzahra' },
+      { code: 'ATLM-IKES-004', version: 4, npm: null, name: null },
+      { code: 'ATLM-IKES-005', version: 5, npm: null, name: null },
+      { code: 'ATLM-IKES-006', version: 6, npm: null, name: null },
+      { code: 'ATLM-IKES-007', version: 7, npm: null, name: null },
+      { code: 'ATLM-IKES-008', version: 8, npm: null, name: null },
+      { code: 'ATLM-IKES-009', version: 9, npm: null, name: null },
+      { code: 'ATLM-IKES-010', version: 10, npm: null, name: null },
+      { code: 'ATLM-IKES-011', version: 11, npm: null, name: null },
+      { code: 'ATLM-IKES-012', version: 12, npm: null, name: null },
+    ];
 
-  const nowIso = new Date().toISOString();
-  edgeState.accessCodes = [];
-  for (const item of seedCodes) {
-    const h = await sha256Hex(item.code);
-    const used = Boolean(item.npm);
-    edgeState.accessCodes.push({
-      id: item.version,
-      codeHash: h,
-      codeDisplay: used
-        ? `${item.code} • Digunakan oleh NPM ${item.npm} (${item.name})`
-        : `${item.code} • Kode Aktivasi Unik Mahasiswa (Tersedia - 1 Mahasiswa)`,
-      version: item.version,
-      className: used
-        ? `ATLM Reguler - IKES Rajawali [NPM:${item.npm}]`
-        : 'ATLM Reguler - IKES Rajawali',
-      isActive: !used,
-      activatedCount: used ? 1 : 0,
-      createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
-      createdAt: nowIso,
-    });
+    const nowIso = new Date().toISOString();
+    edgeState.accessCodes = [];
+    for (const item of seedCodes) {
+      const h = await sha256Hex(item.code);
+      const used = Boolean(item.npm);
+      edgeState.accessCodes.push({
+        id: item.version,
+        codeHash: h,
+        codeDisplay: used
+          ? `${item.code} • Digunakan oleh NPM ${item.npm} (${item.name})`
+          : `${item.code} • Kode Aktivasi Unik Mahasiswa (Tersedia - 1 Mahasiswa)`,
+        version: item.version,
+        className: used
+          ? `ATLM Reguler - IKES Rajawali [NPM:${item.npm}]`
+          : 'ATLM Reguler - IKES Rajawali',
+        isActive: !used,
+        activatedCount: used ? 1 : 0,
+        createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
+        createdAt: nowIso,
+      });
+    }
+
+    const initialStudents = [
+      {
+        id: 1,
+        npm: '24011001',
+        fullName: 'Aulia Rahma Putri',
+        className: 'ATLM Reguler A - IKES Rajawali',
+        gender: 'female_atlm' as const,
+        codeUsed: 'ATLM-IKES-001',
+        version: 1,
+        score: 4860,
+      },
+      {
+        id: 2,
+        npm: '24011014',
+        fullName: 'Muhammad Farhan Pratama',
+        className: 'ATLM Reguler A - IKES Rajawali',
+        gender: 'male_atlm' as const,
+        codeUsed: 'ATLM-IKES-002',
+        version: 2,
+        score: 4680,
+      },
+      {
+        id: 3,
+        npm: '24011028',
+        fullName: 'Siti Nabila Azzahra',
+        className: 'ATLM Reguler B - IKES Rajawali',
+        gender: 'female_atlm' as const,
+        codeUsed: 'ATLM-IKES-003',
+        version: 3,
+        score: 4520,
+      },
+    ];
+
+    for (const s of initialStudents) {
+      edgeState.entitlements.push({
+        id: s.id,
+        npm: s.npm,
+        studentName: s.fullName,
+        className: s.className,
+        activatedWithCodeVersion: s.version,
+        activatedWithCodeDisplay: `${s.codeUsed} • Kode Aktivasi Unik Mahasiswa`,
+        sessionToken: `lifetime_${s.npm}_${s.version}`,
+        isLifetimeActive: true,
+        activatedAt: nowIso,
+        lastAccessedAt: nowIso,
+      });
+
+      edgeState.profiles.set(s.npm, {
+        npm: s.npm,
+        fullName: s.fullName,
+        className: s.className,
+        level: 5,
+        xp: s.score,
+        highestScore: s.score,
+        averageScore: s.score,
+        quizCount: 1,
+        completedModules: [1, 2, 3, 4, 5],
+        avatarGender: s.gender,
+        skinTone: '#f1c27d',
+        hairStyle: 'modern',
+        shoeColor: '#0f172a',
+      });
+    }
   }
 
-  const initialStudents = [
-    {
-      id: 1,
-      npm: '24011001',
-      fullName: 'Aulia Rahma Putri',
-      className: 'ATLM Reguler A - IKES Rajawali',
-      gender: 'female_atlm' as const,
-      codeUsed: 'ATLM-IKES-001',
-      version: 1,
-      score: 4860,
-      correctCount: 49,
-      durationSec: 840,
-    },
-    {
-      id: 2,
-      npm: '24011014',
-      fullName: 'Muhammad Farhan Pratama',
-      className: 'ATLM Reguler A - IKES Rajawali',
-      gender: 'male_atlm' as const,
-      codeUsed: 'ATLM-IKES-002',
-      version: 2,
-      score: 4680,
-      correctCount: 47,
-      durationSec: 910,
-    },
-    {
-      id: 3,
-      npm: '24011028',
-      fullName: 'Siti Nabila Azzahra',
-      className: 'ATLM Reguler B - IKES Rajawali',
-      gender: 'female_atlm' as const,
-      codeUsed: 'ATLM-IKES-003',
-      version: 3,
-      score: 4520,
-      correctCount: 46,
-      durationSec: 960,
-    },
-  ];
-
-  for (const s of initialStudents) {
-    edgeState.entitlements.push({
-      id: s.id,
-      npm: s.npm,
-      studentName: s.fullName,
-      className: s.className,
-      activatedWithCodeVersion: s.version,
-      activatedWithCodeDisplay: `${s.codeUsed} • Kode Aktivasi Unik Mahasiswa`,
-      sessionToken: `lifetime_${s.npm}_${s.version}`,
-      isLifetimeActive: true,
-      activatedAt: nowIso,
-      lastAccessedAt: nowIso,
-    });
-
-    edgeState.profiles.set(s.npm, {
-      npm: s.npm,
-      fullName: s.fullName,
-      className: s.className,
-      level: 5,
-      xp: s.score,
-      highestScore: s.score,
-      averageScore: s.score,
-      quizCount: 1,
-      completedModules: [1, 2, 3, 4, 5],
-      avatarGender: s.gender,
-      skinTone: '#f1c27d',
-      hairStyle: 'modern',
-      shoeColor: '#0f172a',
-    });
-  }
-
-  // Initialize Cloudflare D1 tables if D1 binding is present
+  // Always synchronize from Cloudflare D1 if D1 binding is present so multi-isolate state never desyncs
   if (env.DB) {
     try {
-      await env.DB.prepare(
-        `CREATE TABLE IF NOT EXISTS d1_kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`
-      ).run();
+      if (!edgeState.initialized) {
+        await env.DB.prepare(
+          `CREATE TABLE IF NOT EXISTS d1_kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`
+        ).run();
+      }
       const saved = await env.DB.prepare(`SELECT value FROM d1_kv_store WHERE key = 'hw_state_v1'`).first();
       if (saved && saved.value) {
         const parsed = JSON.parse(String(saved.value));
@@ -411,14 +492,15 @@ async function ensureEdgeStateSeeded(env: CloudflareEnv): Promise<void> {
         if (Array.isArray(parsed.profiles)) {
           edgeState.profiles = new Map(parsed.profiles);
         }
-      } else {
+      } else if (!edgeState.initialized) {
         await persistEdgeStateToD1(env);
       }
     } catch (err) {
-      console.error('D1 init info:', err);
+      console.error('D1 sync info:', err);
     }
   }
 
+  await syncEdgeStateIntegrity();
   edgeState.initialized = true;
 }
 
@@ -809,23 +891,29 @@ export async function handleApiRequest(
       path === '/api/auth/student/session') &&
     method === 'POST'
   ) {
-    const rateKey = getWorkerClientKey(request, 'student_auth');
+    const body: any = await request.json().catch(() => ({}));
+    const cleanNpm = normalizeNpm(body.npm);
+    const cleanName = String(body.fullName || '')
+      .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+    const cleanClass =
+      String(body.className || 'ATLM Reguler - IKES Rajawali')
+        .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ')
+        .trim() || 'ATLM Reguler - IKES Rajawali';
+    const cleanCode = normalizeActivationCode(body.accessCode);
+    const selectedGender = body.avatarGender === 'male_atlm' ? 'male_atlm' : 'female_atlm';
+
+    const rateKey = getWorkerClientKey(request, 'student_auth', cleanNpm || 'anon');
     const rateStatus = checkWorkerRate(rateKey);
     if (!rateStatus.allowed) {
       return jsonResponse(
         {
-          error: `Terlalu banyak percobaan gagal. Silakan tunggu ${rateStatus.retryAfterSec} detik.`,
+          error: `Terlalu banyak percobaan gagal untuk NPM ini. Silakan tunggu ${rateStatus.retryAfterSec} detik.`,
         },
         429
       );
     }
-
-    const body: any = await request.json().catch(() => ({}));
-    const cleanNpm = String(body.npm || '').trim();
-    const cleanName = String(body.fullName || '').trim();
-    const cleanClass = String(body.className || 'ATLM Reguler - IKES Rajawali').trim();
-    const cleanCode = String(body.accessCode || '').trim().toUpperCase();
-    const selectedGender = body.avatarGender === 'male_atlm' ? 'male_atlm' : 'female_atlm';
 
     if (!cleanNpm || cleanNpm.length < 4) {
       return jsonResponse(
@@ -834,54 +922,200 @@ export async function handleApiRequest(
       );
     }
 
-    if (cleanCode) {
-      const inputHash = await sha256Hex(cleanCode);
-      const codeRecord = edgeState.accessCodes.find((c) => c.codeHash === inputHash);
-      if (!codeRecord) {
-        recordWorkerFailure(rateKey);
-        return jsonResponse(
-          { error: 'Kode aktivasi tidak valid. Pastikan kode sesuai dengan yang diberikan oleh Dosen.' },
-          401
-        );
-      }
-      const otherOwner = edgeState.entitlements.find(
-        (e) => e.activatedWithCodeVersion === codeRecord.version && e.npm !== cleanNpm
-      );
-      if (otherOwner) {
-        recordWorkerFailure(rateKey);
-        return jsonResponse(
-          {
-            error:
-              'Kode aktivasi ini sudah digunakan oleh mahasiswa lain. Setiap kode aktivasi bersifat unik dan hanya berlaku untuk satu mahasiswa.',
-          },
-          403
-        );
-      }
-    }
+    return withWorkerLock('student_auth_mutation', async () => {
+      // Re-sync from D1 inside lock
+      await ensureEdgeStateSeeded(env);
 
-    const existingEnt = edgeState.entitlements.find((e) => e.npm === cleanNpm);
-    if (existingEnt) {
-      if (!existingEnt.isLifetimeActive) {
-        return jsonResponse(
-          { error: 'Status akun NPM ini sedang dinonaktifkan oleh Dosen Pengampu.' },
-          403
-        );
-      }
-
-      if (cleanCode && body.mode === 'activate') {
+      let matchedCode: EdgeAccessCode | undefined;
+      if (cleanCode) {
         const inputHash = await sha256Hex(cleanCode);
-        const codeRecord = edgeState.accessCodes.find((c) => c.codeHash === inputHash);
-        if (codeRecord && codeRecord.version !== existingEnt.activatedWithCodeVersion) {
+        matchedCode = edgeState.accessCodes.find(
+          (c) =>
+            c.codeHash === inputHash ||
+            extractRawCodeFromDisplay(c.codeDisplay) === cleanCode
+        );
+        if (!matchedCode) {
+          recordWorkerFailure(rateKey, 10);
           return jsonResponse(
             {
-              error: `NPM ${cleanNpm} sudah aktif seumur hidup dengan kode versi #${existingEnt.activatedWithCodeVersion}. Silakan langsung masuk melalui tab "Login Mahasiswa Aktif".`,
+              error:
+                'Kode aktivasi tidak valid. Pastikan kode sesuai dengan yang diterbitkan oleh Dosen.',
             },
-            400
+            401
+          );
+        }
+
+        const otherOwner = edgeState.entitlements.find(
+          (e) =>
+            e.activatedWithCodeVersion === matchedCode!.version &&
+            normalizeNpm(e.npm) !== cleanNpm
+        );
+        const boundNpmMatch = matchedCode.className.match(/\[NPM:([^\]]+)\]/i);
+        const boundNpm = boundNpmMatch ? normalizeNpm(boundNpmMatch[1]) : null;
+
+        if (otherOwner || (boundNpm && boundNpm !== cleanNpm)) {
+          recordWorkerFailure(rateKey, 10);
+          return jsonResponse(
+            {
+              error:
+                'Kode aktivasi ini sudah digunakan oleh mahasiswa lain. Setiap kode aktivasi bersifat unik dan hanya berlaku untuk satu mahasiswa.',
+            },
+            403
           );
         }
       }
 
-      existingEnt.lastAccessedAt = new Date().toISOString();
+      // Self-heal if student exists in profiles or bound code but missing in entitlements
+      let existingEnt = edgeState.entitlements.find((e) => normalizeNpm(e.npm) === cleanNpm);
+      if (!existingEnt) {
+        const existingProf = edgeState.profiles.get(cleanNpm);
+        const boundCode = edgeState.accessCodes.find((c) => {
+          const m = c.className.match(/\[NPM:([^\]]+)\]/i);
+          return m && normalizeNpm(m[1]) === cleanNpm;
+        });
+        if (existingProf || boundCode) {
+          const nowIso = new Date().toISOString();
+          const ver = boundCode?.version || 1;
+          const pure = boundCode ? extractRawCodeFromDisplay(boundCode.codeDisplay) : `ATLM-IKES-${String(ver).padStart(3, '0')}`;
+          const healedName = existingProf?.fullName || cleanName || `Mahasiswa ATLM (${cleanNpm})`;
+          const healedClass = existingProf?.className || cleanClass;
+          existingEnt = {
+            id: edgeState.entitlements.length + 1,
+            npm: cleanNpm,
+            studentName: healedName,
+            className: healedClass,
+            activatedWithCodeVersion: ver,
+            activatedWithCodeDisplay: `${pure} • Kode Aktivasi Unik Mahasiswa`,
+            sessionToken: `lifetime_${cleanNpm}_${ver}`,
+            isLifetimeActive: true,
+            activatedAt: nowIso,
+            lastAccessedAt: nowIso,
+          };
+          edgeState.entitlements.unshift(existingEnt);
+          await syncEdgeStateIntegrity();
+          await persistEdgeStateToD1(env);
+        }
+      }
+
+      if (existingEnt) {
+        if (!existingEnt.isLifetimeActive) {
+          return jsonResponse(
+            { error: 'Status akun NPM ini sedang dinonaktifkan oleh Dosen Pengampu.' },
+            403
+          );
+        }
+
+        if (cleanCode && body.mode === 'activate' && matchedCode) {
+          if (matchedCode.version !== existingEnt.activatedWithCodeVersion) {
+            return jsonResponse(
+              {
+                error: `NPM ${cleanNpm} sudah aktif seumur hidup dengan kode versi #${existingEnt.activatedWithCodeVersion}. Silakan langsung masuk melalui tab "Login Mahasiswa Aktif" tanpa kode baru.`,
+              },
+              400
+            );
+          }
+        }
+
+        existingEnt.lastAccessedAt = new Date().toISOString();
+        if (cleanName && cleanName.length >= 2) {
+          existingEnt.studentName = cleanName;
+          const p = edgeState.profiles.get(cleanNpm);
+          if (p) p.fullName = cleanName;
+        }
+        await persistEdgeStateToD1(env);
+        workerRateMap.delete(rateKey);
+
+        const fullStudent = buildEdgeStudentPayload(cleanNpm);
+        const token = await signWorkerSession(
+          env,
+          {
+            role: 'student',
+            sub: cleanNpm,
+            name: fullStudent?.fullName || existingEnt.studentName,
+            className: fullStudent?.className || existingEnt.className,
+          },
+          86400 * 30
+        );
+
+        return jsonResponse(
+          {
+            success: true,
+            isExistingLifetime: true,
+            message: `Selamat datang kembali, ${fullStudent?.fullName || existingEnt.studentName}! Sesi Akses Seumur Hidup Anda aktif.`,
+            student: fullStudent,
+          },
+          200,
+          {
+            'Set-Cookie': makeCookieHeader(request, 'hw_student_session', token, 86400 * 30),
+          }
+        );
+      }
+
+      if (!cleanCode || !matchedCode) {
+        recordWorkerFailure(rateKey, 10);
+        return jsonResponse(
+          {
+            error:
+              'NPM belum pernah diaktifkan. Silakan pilih tab "Aktivasi Pertama Kali" dan masukkan Kode Aktivasi Unik dari Dosen.',
+          },
+          404
+        );
+      }
+
+      if (matchedCode.activatedCount > 0) {
+        recordWorkerFailure(rateKey, 10);
+        return jsonResponse(
+          {
+            error:
+              'Kode aktivasi ini sudah digunakan. Setiap kode aktivasi hanya berlaku satu kali untuk satu mahasiswa.',
+          },
+          403
+        );
+      }
+
+      if (!matchedCode.isActive) {
+        recordWorkerFailure(rateKey, 10);
+        return jsonResponse({ error: 'Kode aktivasi ini telah dinonaktifkan oleh Dosen.' }, 401);
+      }
+
+      const finalStudentName =
+        cleanName && cleanName.length >= 2 ? cleanName : `Mahasiswa ATLM (${cleanNpm})`;
+      const rawLabel = extractRawCodeFromDisplay(matchedCode.codeDisplay) || cleanCode;
+      matchedCode.isActive = false;
+      matchedCode.activatedCount = 1;
+      matchedCode.codeDisplay = `${rawLabel} • Digunakan oleh NPM ${cleanNpm} (${finalStudentName})`;
+      matchedCode.className = `${cleanClass} [NPM:${cleanNpm}]`;
+
+      const nowIso = new Date().toISOString();
+      edgeState.entitlements.unshift({
+        id: edgeState.entitlements.length + 1,
+        npm: cleanNpm,
+        studentName: finalStudentName,
+        className: cleanClass,
+        activatedWithCodeVersion: matchedCode.version,
+        activatedWithCodeDisplay: `${rawLabel} • Kode Aktivasi Unik Mahasiswa`,
+        sessionToken: `lifetime_${cleanNpm}_${matchedCode.version}`,
+        isLifetimeActive: true,
+        activatedAt: nowIso,
+        lastAccessedAt: nowIso,
+      });
+
+      edgeState.profiles.set(cleanNpm, {
+        npm: cleanNpm,
+        fullName: finalStudentName,
+        className: cleanClass,
+        level: 1,
+        xp: 100,
+        highestScore: 0,
+        averageScore: 0,
+        quizCount: 0,
+        completedModules: [],
+        avatarGender: selectedGender,
+        skinTone: '#f1c27d',
+        hairStyle: 'modern',
+        shoeColor: '#0f172a',
+      });
+
       await persistEdgeStateToD1(env);
       workerRateMap.delete(rateKey);
 
@@ -891,8 +1125,8 @@ export async function handleApiRequest(
         {
           role: 'student',
           sub: cleanNpm,
-          name: fullStudent?.fullName || existingEnt.studentName,
-          className: fullStudent?.className || existingEnt.className,
+          name: finalStudentName,
+          className: cleanClass,
         },
         86400 * 30
       );
@@ -900,8 +1134,9 @@ export async function handleApiRequest(
       return jsonResponse(
         {
           success: true,
-          isExistingLifetime: true,
-          message: `Selamat datang kembali, ${fullStudent?.fullName || existingEnt.studentName}! Sesi Akses Seumur Hidup Anda aktif.`,
+          isExistingLifetime: false,
+          message:
+            'Aktivasi Akun Mahasiswa Berhasil! Kode aktivasi Anda kini terikat permanen dengan NPM Anda seumur hidup.',
           student: fullStudent,
         },
         200,
@@ -909,116 +1144,7 @@ export async function handleApiRequest(
           'Set-Cookie': makeCookieHeader(request, 'hw_student_session', token, 86400 * 30),
         }
       );
-    }
-
-    if (!cleanCode) {
-      recordWorkerFailure(rateKey);
-      return jsonResponse(
-        {
-          error:
-            'NPM belum pernah diaktifkan. Silakan pilih tab "Aktivasi Pertama Kali" dan masukkan Kode Aktivasi Unik dari Dosen.',
-        },
-        404
-      );
-    }
-
-    if (!cleanName || cleanName.length < 2) {
-      return jsonResponse(
-        { error: 'Nama Lengkap Mahasiswa wajib diisi untuk aktivasi pertama kali.' },
-        400
-      );
-    }
-
-    const inputHash = await sha256Hex(cleanCode);
-    const matchedCode = edgeState.accessCodes.find((c) => c.codeHash === inputHash);
-    if (!matchedCode) {
-      recordWorkerFailure(rateKey);
-      return jsonResponse(
-        { error: 'Kode aktivasi tidak valid. Silakan minta Kode Aktivasi Unik dari Dosen.' },
-        401
-      );
-    }
-
-    if (matchedCode.activatedCount > 0) {
-      recordWorkerFailure(rateKey);
-      return jsonResponse(
-        {
-          error:
-            'Kode aktivasi ini sudah digunakan. Setiap kode aktivasi hanya berlaku satu kali untuk satu mahasiswa.',
-        },
-        403
-      );
-    }
-
-    if (!matchedCode.isActive) {
-      recordWorkerFailure(rateKey);
-      return jsonResponse({ error: 'Kode aktivasi ini telah dinonaktifkan oleh Dosen.' }, 401);
-    }
-
-    const rawLabel = matchedCode.codeDisplay.split('•')[0].trim() || cleanCode;
-    matchedCode.isActive = false;
-    matchedCode.activatedCount = 1;
-    matchedCode.codeDisplay = `${rawLabel} • Digunakan oleh NPM ${cleanNpm} (${cleanName})`;
-    matchedCode.className = `${cleanClass} [NPM:${cleanNpm}]`;
-
-    const nowIso = new Date().toISOString();
-    edgeState.entitlements.unshift({
-      id: edgeState.entitlements.length + 1,
-      npm: cleanNpm,
-      studentName: cleanName,
-      className: cleanClass,
-      activatedWithCodeVersion: matchedCode.version,
-      activatedWithCodeDisplay: `${rawLabel} • Kode Aktivasi Unik Mahasiswa`,
-      sessionToken: `lifetime_${cleanNpm}_${matchedCode.version}`,
-      isLifetimeActive: true,
-      activatedAt: nowIso,
-      lastAccessedAt: nowIso,
     });
-
-    edgeState.profiles.set(cleanNpm, {
-      npm: cleanNpm,
-      fullName: cleanName,
-      className: cleanClass,
-      level: 1,
-      xp: 100,
-      highestScore: 0,
-      averageScore: 0,
-      quizCount: 0,
-      completedModules: [],
-      avatarGender: selectedGender,
-      skinTone: '#f1c27d',
-      hairStyle: 'modern',
-      shoeColor: '#0f172a',
-    });
-
-    await persistEdgeStateToD1(env);
-    workerRateMap.delete(rateKey);
-
-    const fullStudent = buildEdgeStudentPayload(cleanNpm);
-    const token = await signWorkerSession(
-      env,
-      {
-        role: 'student',
-        sub: cleanNpm,
-        name: cleanName,
-        className: cleanClass,
-      },
-      86400 * 30
-    );
-
-    return jsonResponse(
-      {
-        success: true,
-        isExistingLifetime: false,
-        message:
-          'Aktivasi Akun Mahasiswa Berhasil! Kode aktivasi Anda kini terikat permanen dengan NPM Anda seumur hidup.',
-        student: fullStudent,
-      },
-      200,
-      {
-        'Set-Cookie': makeCookieHeader(request, 'hw_student_session', token, 86400 * 30),
-      }
-    );
   }
 
   // 3. Quiz Questions: GET /api/quiz/questions
@@ -1276,6 +1402,7 @@ export async function handleApiRequest(
           .sort((a, b) => b.version - a.version)
           .map((c) => ({
             id: c.id,
+            pureCode: extractRawCodeFromDisplay(c.codeDisplay),
             codeLabel: c.codeDisplay,
             version: c.version,
             isActive: c.isActive,
@@ -1293,6 +1420,7 @@ export async function handleApiRequest(
           .sort((a, b) => b.version - a.version)
           .map((c) => ({
             id: c.id,
+            pureCode: extractRawCodeFromDisplay(c.codeDisplay),
             codeLabel: c.codeDisplay,
             version: c.version,
             isActive: c.isActive,
@@ -1306,72 +1434,79 @@ export async function handleApiRequest(
 
     if (path === '/api/lecturer/access-codes' && method === 'POST') {
       const body: any = await request.json().catch(() => ({}));
-      let nextVersion =
-        edgeState.accessCodes.length > 0
-          ? Math.max(...edgeState.accessCodes.map((c) => c.version)) + 1
-          : 1;
+      return withWorkerLock('lecturer_generate_codes', async () => {
+        await ensureEdgeStateSeeded(env);
+        let nextVersion =
+          edgeState.accessCodes.length > 0
+            ? Math.max(...edgeState.accessCodes.map((c) => c.version)) + 1
+            : 1;
 
-      if (body.batchCount && Number(body.batchCount) > 0) {
-        const count = Math.min(50, Math.max(1, Number(body.batchCount)));
-        const generatedCodes: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const randHex = Math.floor(1000 + Math.random() * 9000).toString(16).toUpperCase();
-          const uniqueCode = `ATLM-${String(nextVersion).padStart(3, '0')}-${randHex}`;
-          const h = await sha256Hex(uniqueCode);
-          edgeState.accessCodes.push({
-            id: nextVersion,
-            codeHash: h,
-            codeDisplay: `${uniqueCode} • ${
-              body.codeLabel || 'Kode Aktivasi Unik Mahasiswa'
-            } (Tersedia - 1 Mahasiswa)`,
-            version: nextVersion,
-            className: 'ATLM Reguler - IKES Rajawali',
-            isActive: true,
-            activatedCount: 0,
-            createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
-            createdAt: new Date().toISOString(),
+        if (body.batchCount && Number(body.batchCount) > 0) {
+          const count = Math.min(100, Math.max(1, Number(body.batchCount)));
+          const generatedCodes: string[] = [];
+          for (let i = 0; i < count; i++) {
+            const randHex = Math.floor(1000 + Math.random() * 9000).toString(16).toUpperCase();
+            const uniqueCode = normalizeActivationCode(
+              `ATLM-${String(nextVersion).padStart(3, '0')}-${randHex}`
+            );
+            const h = await sha256Hex(uniqueCode);
+            edgeState.accessCodes.push({
+              id: nextVersion,
+              codeHash: h,
+              codeDisplay: `${uniqueCode} • ${
+                body.codeLabel || 'Kode Aktivasi Unik Mahasiswa'
+              } (Tersedia - 1 Mahasiswa)`,
+              version: nextVersion,
+              className: 'ATLM Reguler - IKES Rajawali',
+              isActive: true,
+              activatedCount: 0,
+              createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
+              createdAt: new Date().toISOString(),
+            });
+            generatedCodes.push(uniqueCode);
+            nextVersion++;
+          }
+          await persistEdgeStateToD1(env);
+          return jsonResponse({
+            success: true,
+            message: `${generatedCodes.length} Kode Aktivasi Unik berhasil diterbitkan: ${generatedCodes.join(', ')}`,
+            generatedCodes,
           });
-          generatedCodes.push(uniqueCode);
-          nextVersion++;
         }
+
+        const rawCode = normalizeActivationCode(body.newCode);
+        if (!rawCode || rawCode.length < 4) {
+          return jsonResponse({ error: 'Kode aktivasi unik minimal 4 karakter.' }, 400);
+        }
+        const h = await sha256Hex(rawCode);
+        if (
+          edgeState.accessCodes.some(
+            (c) => c.codeHash === h || extractRawCodeFromDisplay(c.codeDisplay) === rawCode
+          )
+        ) {
+          return jsonResponse({ error: 'Kode aktivasi tersebut sudah pernah dibuat.' }, 400);
+        }
+
+        const created: EdgeAccessCode = {
+          id: nextVersion,
+          codeHash: h,
+          codeDisplay: `${rawCode} • ${
+            body.codeLabel || 'Kode Aktivasi Unik Mahasiswa'
+          } (Tersedia - 1 Mahasiswa)`,
+          version: nextVersion,
+          className: 'ATLM Reguler - IKES Rajawali',
+          isActive: true,
+          activatedCount: 0,
+          createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
+          createdAt: new Date().toISOString(),
+        };
+        edgeState.accessCodes.push(created);
         await persistEdgeStateToD1(env);
         return jsonResponse({
           success: true,
-          message: `${generatedCodes.length} Kode Aktivasi Unik berhasil diterbitkan: ${generatedCodes.join(', ')}`,
-          generatedCodes,
+          message: `Kode Aktivasi Unik ${rawCode} berhasil diterbitkan untuk 1 mahasiswa.`,
+          accessCode: { ...created, pureCode: rawCode },
         });
-      }
-
-      const rawCode = String(body.newCode || '')
-        .trim()
-        .toUpperCase();
-      if (!rawCode || rawCode.length < 4) {
-        return jsonResponse({ error: 'Kode aktivasi unik minimal 4 karakter.' }, 400);
-      }
-      const h = await sha256Hex(rawCode);
-      if (edgeState.accessCodes.some((c) => c.codeHash === h)) {
-        return jsonResponse({ error: 'Kode aktivasi tersebut sudah pernah dibuat.' }, 400);
-      }
-
-      const created: EdgeAccessCode = {
-        id: nextVersion,
-        codeHash: h,
-        codeDisplay: `${rawCode} • ${
-          body.codeLabel || 'Kode Aktivasi Unik Mahasiswa'
-        } (Tersedia - 1 Mahasiswa)`,
-        version: nextVersion,
-        className: 'ATLM Reguler - IKES Rajawali',
-        isActive: true,
-        activatedCount: 0,
-        createdBy: 'dr. Juwita Ninda Suherman, M.Kes',
-        createdAt: new Date().toISOString(),
-      };
-      edgeState.accessCodes.push(created);
-      await persistEdgeStateToD1(env);
-      return jsonResponse({
-        success: true,
-        message: `Kode Aktivasi Unik ${rawCode} berhasil diterbitkan untuk 1 mahasiswa.`,
-        accessCode: created,
       });
     }
 
@@ -1397,7 +1532,8 @@ export async function handleApiRequest(
 
     if (path === '/api/lecturer/toggle-entitlement' && method === 'POST') {
       const body: any = await request.json().catch(() => ({}));
-      const target = edgeState.entitlements.find((e) => e.npm === String(body.npm || '').trim());
+      const cleanTargetNpm = normalizeNpm(body.npm);
+      const target = edgeState.entitlements.find((e) => normalizeNpm(e.npm) === cleanTargetNpm);
       if (target) {
         target.isLifetimeActive = !body.revoked;
         await persistEdgeStateToD1(env);
