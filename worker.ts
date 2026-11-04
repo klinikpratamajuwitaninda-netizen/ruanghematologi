@@ -175,13 +175,70 @@ function normalizeNpm(rawInput: unknown): string {
   if (rawInput === null || rawInput === undefined) return '';
   return String(rawInput)
     .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
+    .replace(/[–—−‐‑‒]/g, '-')
+    .replace(/[\s./]+/g, '')
     .trim()
-    .replace(/\s+/g, '')
     .toUpperCase();
 }
 
 function extractRawCodeFromDisplay(codeDisplay: string): string {
   return normalizeActivationCode(String(codeDisplay || '').split('•')[0]);
+}
+
+function extractWorkerPasswordHash(sessionToken: string | null | undefined): string | null {
+  if (!sessionToken) return null;
+  const match = String(sessionToken).match(/\|pwd:([a-f0-9]{64})/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function buildWorkerEntitlementToken(
+  npm: string,
+  version: number,
+  passwordHash?: string | null
+): string {
+  const base = `lifetime_${npm}_${version}`;
+  if (passwordHash && /^[a-f0-9]{64}$/i.test(passwordHash)) {
+    return `${base}|pwd:${passwordHash.toLowerCase()}`;
+  }
+  return base;
+}
+
+interface WorkerActivationCertPayload {
+  npm: string;
+  studentName: string;
+  className: string;
+  avatarGender: 'male_atlm' | 'female_atlm';
+  activatedWithCodeVersion: number;
+  activatedWithCodeDisplay: string;
+  passwordHash?: string | null;
+  activatedAt: string;
+}
+
+async function signWorkerActivationCert(
+  env: CloudflareEnv,
+  payload: WorkerActivationCertPayload
+): Promise<string> {
+  const dataB64 = toBase64Url(JSON.stringify(payload));
+  const sig = await hmacSha256Base64Url(getSessionSecret(env), `cert:${dataB64}`);
+  return `${dataB64}.${sig}`;
+}
+
+async function verifyWorkerActivationCert(
+  env: CloudflareEnv,
+  certToken: string | undefined | null
+): Promise<WorkerActivationCertPayload | null> {
+  if (!certToken || typeof certToken !== 'string' || !certToken.includes('.')) return null;
+  const [dataB64, sig] = certToken.split('.');
+  if (!dataB64 || !sig) return null;
+  const expectedSig = await hmacSha256Base64Url(getSessionSecret(env), `cert:${dataB64}`);
+  if (!constantTimeEqual(sig, expectedSig)) return null;
+  try {
+    const parsed = JSON.parse(fromBase64Url(dataB64)) as WorkerActivationCertPayload;
+    if (!parsed || !parsed.npm) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 const workerLocks = new Map<string, Promise<unknown>>();
@@ -661,6 +718,7 @@ function buildEdgeStudentPayload(npm: string) {
     latestReview = rebuilt.detailedReview;
   }
 
+  const storedPwdHash = extractWorkerPasswordHash(ent.sessionToken);
   return {
     npm: ent.npm,
     fullName: prof?.fullName || ent.studentName,
@@ -677,8 +735,12 @@ function buildEdgeStudentPayload(npm: string) {
         : 0,
     quizCount: attempts.length || prof?.quizCount || 0,
     isLifetimeActive: ent.isLifetimeActive,
+    accountStatus: ent.isLifetimeActive ? 'Sudah Teraktivasi • Aktif' : 'Nonaktif',
+    codeStatus: 'Sudah Digunakan',
+    hasPassword: Boolean(storedPwdHash),
     activatedWithVersion: ent.activatedWithCodeVersion,
     activatedWithCodeDisplay: ent.activatedWithCodeDisplay.split('•')[0].trim(),
+    activatedCode: ent.activatedWithCodeDisplay.split('•')[0].trim(),
     activatedAt: ent.activatedAt,
     completedModules: prof?.completedModules || [],
     quizHistory: attempts.map((a) => ({
@@ -884,16 +946,97 @@ export async function handleApiRequest(
     });
   }
 
-  // 2. Student Activation & Login: POST /api/auth/student/activate, /api/student-login, /api/auth/student/session
+  // 2A. Student NPM Check: POST /api/auth/student/check-npm
+  if (path === '/api/auth/student/check-npm' && method === 'POST') {
+    const body: any = await request.json().catch(() => ({}));
+    const cleanNpm = normalizeNpm(body.npm);
+    if (!cleanNpm || cleanNpm.length < 3) {
+      return jsonResponse(
+        { exists: false, error: 'Nomor Pokok Mahasiswa (NPM) wajib diisi dengan benar.' },
+        400
+      );
+    }
+
+    await ensureEdgeStateSeeded(env);
+    let existingEnt = edgeState.entitlements.find((e) => normalizeNpm(e.npm) === cleanNpm);
+    const cert =
+      (await verifyWorkerActivationCert(env, body.activationCert)) ||
+      (await verifyWorkerActivationCert(env, cookies['hw_student_registry']));
+
+    if (!existingEnt && cert && normalizeNpm(cert.npm) === cleanNpm) {
+      const nowIso = new Date().toISOString();
+      existingEnt = {
+        id: edgeState.entitlements.length + 1,
+        npm: cleanNpm,
+        studentName: cert.studentName,
+        className: cert.className,
+        activatedWithCodeVersion: cert.activatedWithCodeVersion,
+        activatedWithCodeDisplay: cert.activatedWithCodeDisplay,
+        sessionToken: buildWorkerEntitlementToken(
+          cleanNpm,
+          cert.activatedWithCodeVersion,
+          cert.passwordHash
+        ),
+        isLifetimeActive: true,
+        activatedAt: cert.activatedAt || nowIso,
+        lastAccessedAt: nowIso,
+      };
+      edgeState.entitlements.unshift(existingEnt);
+      await syncEdgeStateIntegrity();
+      await persistEdgeStateToD1(env);
+    }
+
+    if (!existingEnt) {
+      return jsonResponse(
+        {
+          exists: false,
+          npm: cleanNpm,
+          accountStatus: 'Belum Terdaftar',
+          error: 'NPM belum memiliki akun. Silakan lakukan aktivasi terlebih dahulu.',
+        },
+        404
+      );
+    }
+
+    if (!existingEnt.isLifetimeActive) {
+      return jsonResponse(
+        {
+          exists: true,
+          npm: cleanNpm,
+          accountStatus: 'Nonaktif',
+          codeStatus: 'Sudah Digunakan',
+          error: 'Akun Anda sedang dinonaktifkan. Silakan hubungi dosen.',
+        },
+        403
+      );
+    }
+
+    return jsonResponse({
+      exists: true,
+      npm: cleanNpm,
+      studentName: existingEnt.studentName,
+      className: existingEnt.className,
+      accountStatus: 'Sudah Teraktivasi',
+      isActive: true,
+      codeStatus: 'Sudah Digunakan',
+      activatedCode: extractRawCodeFromDisplay(existingEnt.activatedWithCodeDisplay),
+      hasPassword: Boolean(extractWorkerPasswordHash(existingEnt.sessionToken)),
+      message: 'Akun berhasil ditemukan. Silakan melanjutkan proses login.',
+    });
+  }
+
+  // 2B. Student Activation, Login & Recovery: POST /api/auth/student/activate, /api/student-activate, /api/student-login, /api/auth/student/session, /api/auth/student/recover
   if (
     (path === '/api/auth/student/activate' ||
+      path === '/api/student-activate' ||
       path === '/api/student-login' ||
-      path === '/api/auth/student/session') &&
+      path === '/api/auth/student/session' ||
+      path === '/api/auth/student/recover') &&
     method === 'POST'
   ) {
     const body: any = await request.json().catch(() => ({}));
     const cleanNpm = normalizeNpm(body.npm);
-    const cleanName = String(body.fullName || '')
+    const cleanName = String(body.fullName || body.studentName || body.name || '')
       .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ')
       .trim()
       .replace(/\s+/g, ' ');
@@ -901,8 +1044,16 @@ export async function handleApiRequest(
       String(body.className || 'ATLM Reguler - IKES Rajawali')
         .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ')
         .trim() || 'ATLM Reguler - IKES Rajawali';
-    const cleanCode = normalizeActivationCode(body.accessCode);
+    const cleanCode = normalizeActivationCode(body.accessCode || body.activationCode || body.code);
+    const rawPassword =
+      typeof (body.password || body.newPassword) === 'string'
+        ? String(body.password || body.newPassword).trim()
+        : '';
     const selectedGender = body.avatarGender === 'male_atlm' ? 'male_atlm' : 'female_atlm';
+    const mode =
+      path === '/api/auth/student/recover'
+        ? 'recover'
+        : String(body.mode || (cleanCode ? 'activate' : 'login')).toLowerCase();
 
     const rateKey = getWorkerClientKey(request, 'student_auth', cleanNpm || 'anon');
     const rateStatus = checkWorkerRate(rateKey);
@@ -915,15 +1066,14 @@ export async function handleApiRequest(
       );
     }
 
-    if (!cleanNpm || cleanNpm.length < 4) {
+    if (!cleanNpm || cleanNpm.length < 3) {
       return jsonResponse(
-        { error: 'Nomor Pokok Mahasiswa (NPM) wajib diisi dengan benar (minimal 4 karakter).' },
+        { error: 'Nomor Pokok Mahasiswa (NPM) wajib diisi dengan benar.' },
         400
       );
     }
 
     return withWorkerLock('student_auth_mutation', async () => {
-      // Re-sync from D1 inside lock
       await ensureEdgeStateSeeded(env);
 
       let matchedCode: EdgeAccessCode | undefined;
@@ -965,7 +1115,7 @@ export async function handleApiRequest(
         }
       }
 
-      // Self-heal if student exists in profiles or bound code but missing in entitlements
+      // Multi-source self-healing: check entitlements, profiles, bound access codes, attempts, or signed activation certificate
       let existingEnt = edgeState.entitlements.find((e) => normalizeNpm(e.npm) === cleanNpm);
       if (!existingEnt) {
         const existingProf = edgeState.profiles.get(cleanNpm);
@@ -973,12 +1123,33 @@ export async function handleApiRequest(
           const m = c.className.match(/\[NPM:([^\]]+)\]/i);
           return m && normalizeNpm(m[1]) === cleanNpm;
         });
-        if (existingProf || boundCode) {
+        const attemptRecord = edgeState.attempts.find((a) => normalizeNpm(a.npm) === cleanNpm);
+        const verifiedCert =
+          (await verifyWorkerActivationCert(env, body.activationCert)) ||
+          (await verifyWorkerActivationCert(env, cookies['hw_student_registry']));
+        const matchingCert =
+          verifiedCert && normalizeNpm(verifiedCert.npm) === cleanNpm ? verifiedCert : null;
+
+        if (existingProf || boundCode || attemptRecord || matchingCert) {
           const nowIso = new Date().toISOString();
-          const ver = boundCode?.version || 1;
-          const pure = boundCode ? extractRawCodeFromDisplay(boundCode.codeDisplay) : `ATLM-IKES-${String(ver).padStart(3, '0')}`;
-          const healedName = existingProf?.fullName || cleanName || `Mahasiswa ATLM (${cleanNpm})`;
-          const healedClass = existingProf?.className || cleanClass;
+          const ver =
+            boundCode?.version || matchingCert?.activatedWithCodeVersion || 1;
+          const pure = boundCode
+            ? extractRawCodeFromDisplay(boundCode.codeDisplay)
+            : matchingCert
+            ? extractRawCodeFromDisplay(matchingCert.activatedWithCodeDisplay)
+            : `ATLM-IKES-${String(ver).padStart(3, '0')}`;
+          const healedName =
+            existingProf?.fullName ||
+            attemptRecord?.studentName ||
+            matchingCert?.studentName ||
+            cleanName ||
+            `Mahasiswa ATLM (${cleanNpm})`;
+          const healedClass =
+            existingProf?.className ||
+            attemptRecord?.className ||
+            matchingCert?.className ||
+            cleanClass;
           existingEnt = {
             id: edgeState.entitlements.length + 1,
             npm: cleanNpm,
@@ -986,9 +1157,13 @@ export async function handleApiRequest(
             className: healedClass,
             activatedWithCodeVersion: ver,
             activatedWithCodeDisplay: `${pure} • Kode Aktivasi Unik Mahasiswa`,
-            sessionToken: `lifetime_${cleanNpm}_${ver}`,
+            sessionToken: buildWorkerEntitlementToken(
+              cleanNpm,
+              ver,
+              matchingCert?.passwordHash || null
+            ),
             isLifetimeActive: true,
-            activatedAt: nowIso,
+            activatedAt: matchingCert?.activatedAt || nowIso,
             lastAccessedAt: nowIso,
           };
           edgeState.entitlements.unshift(existingEnt);
@@ -1000,20 +1175,32 @@ export async function handleApiRequest(
       if (existingEnt) {
         if (!existingEnt.isLifetimeActive) {
           return jsonResponse(
-            { error: 'Status akun NPM ini sedang dinonaktifkan oleh Dosen Pengampu.' },
+            { error: 'Akun Anda sedang dinonaktifkan. Silakan hubungi dosen.' },
             403
           );
         }
 
-        if (cleanCode && body.mode === 'activate' && matchedCode) {
-          if (matchedCode.version !== existingEnt.activatedWithCodeVersion) {
-            return jsonResponse(
-              {
-                error: `NPM ${cleanNpm} sudah aktif seumur hidup dengan kode versi #${existingEnt.activatedWithCodeVersion}. Silakan langsung masuk melalui tab "Login Mahasiswa Aktif" tanpa kode baru.`,
-              },
-              400
-            );
+        const storedPwdHash = extractWorkerPasswordHash(existingEnt.sessionToken);
+
+        if (mode === 'recover') {
+          const newPwdHash = rawPassword ? await sha256Hex(rawPassword) : storedPwdHash;
+          existingEnt.sessionToken = buildWorkerEntitlementToken(
+            cleanNpm,
+            existingEnt.activatedWithCodeVersion,
+            newPwdHash
+          );
+        } else if (mode === 'login' && storedPwdHash && rawPassword.length > 0) {
+          const inputPwdHash = await sha256Hex(rawPassword);
+          if (!constantTimeEqual(inputPwdHash, storedPwdHash)) {
+            recordWorkerFailure(rateKey, 10);
+            return jsonResponse({ error: 'NPM atau password tidak sesuai.' }, 401);
           }
+        } else if (!storedPwdHash && rawPassword.length >= 3) {
+          existingEnt.sessionToken = buildWorkerEntitlementToken(
+            cleanNpm,
+            existingEnt.activatedWithCodeVersion,
+            await sha256Hex(rawPassword)
+          );
         }
 
         existingEnt.lastAccessedAt = new Date().toISOString();
@@ -1025,7 +1212,21 @@ export async function handleApiRequest(
         await persistEdgeStateToD1(env);
         workerRateMap.delete(rateKey);
 
-        const fullStudent = buildEdgeStudentPayload(cleanNpm);
+        const fullStudent: any = buildEdgeStudentPayload(cleanNpm);
+        const certToken = await signWorkerActivationCert(env, {
+          npm: cleanNpm,
+          studentName: fullStudent?.fullName || existingEnt.studentName,
+          className: fullStudent?.className || existingEnt.className,
+          avatarGender: fullStudent?.avatarGender || 'female_atlm',
+          activatedWithCodeVersion: existingEnt.activatedWithCodeVersion,
+          activatedWithCodeDisplay: existingEnt.activatedWithCodeDisplay,
+          passwordHash: extractWorkerPasswordHash(existingEnt.sessionToken),
+          activatedAt: existingEnt.activatedAt,
+        });
+        if (fullStudent) {
+          fullStudent.activationCert = certToken;
+        }
+
         const token = await signWorkerSession(
           env,
           {
@@ -1041,22 +1242,28 @@ export async function handleApiRequest(
           {
             success: true,
             isExistingLifetime: true,
-            message: `Selamat datang kembali, ${fullStudent?.fullName || existingEnt.studentName}! Sesi Akses Seumur Hidup Anda aktif.`,
+            wasRecovered: mode === 'recover',
+            message: `Akun berhasil ditemukan. Selamat datang kembali, ${fullStudent?.fullName || existingEnt.studentName}!`,
             student: fullStudent,
           },
           200,
           {
-            'Set-Cookie': makeCookieHeader(request, 'hw_student_session', token, 86400 * 30),
+            'Set-Cookie': [
+              makeCookieHeader(request, 'hw_student_session', token, 86400 * 30),
+              makeCookieHeader(request, 'hw_student_registry', certToken, 86400 * 365),
+            ],
           }
         );
       }
 
-      if (!cleanCode || !matchedCode) {
+      if (mode === 'login' || mode === 'recover' || !cleanCode || !matchedCode) {
         recordWorkerFailure(rateKey, 10);
         return jsonResponse(
           {
             error:
-              'NPM belum pernah diaktifkan. Silakan pilih tab "Aktivasi Pertama Kali" dan masukkan Kode Aktivasi Unik dari Dosen.',
+              mode === 'login' || mode === 'recover'
+                ? 'NPM belum memiliki akun. Silakan lakukan aktivasi terlebih dahulu.'
+                : 'Kode aktivasi wajib diisi untuk mengaktifkan akun mahasiswa baru.',
           },
           404
         );
@@ -1086,6 +1293,7 @@ export async function handleApiRequest(
       matchedCode.codeDisplay = `${rawLabel} • Digunakan oleh NPM ${cleanNpm} (${finalStudentName})`;
       matchedCode.className = `${cleanClass} [NPM:${cleanNpm}]`;
 
+      const pwdHash = rawPassword.length >= 3 ? await sha256Hex(rawPassword) : null;
       const nowIso = new Date().toISOString();
       edgeState.entitlements.unshift({
         id: edgeState.entitlements.length + 1,
@@ -1094,7 +1302,7 @@ export async function handleApiRequest(
         className: cleanClass,
         activatedWithCodeVersion: matchedCode.version,
         activatedWithCodeDisplay: `${rawLabel} • Kode Aktivasi Unik Mahasiswa`,
-        sessionToken: `lifetime_${cleanNpm}_${matchedCode.version}`,
+        sessionToken: buildWorkerEntitlementToken(cleanNpm, matchedCode.version, pwdHash),
         isLifetimeActive: true,
         activatedAt: nowIso,
         lastAccessedAt: nowIso,
@@ -1119,7 +1327,21 @@ export async function handleApiRequest(
       await persistEdgeStateToD1(env);
       workerRateMap.delete(rateKey);
 
-      const fullStudent = buildEdgeStudentPayload(cleanNpm);
+      const fullStudent: any = buildEdgeStudentPayload(cleanNpm);
+      const certToken = await signWorkerActivationCert(env, {
+        npm: cleanNpm,
+        studentName: finalStudentName,
+        className: cleanClass,
+        avatarGender: selectedGender,
+        activatedWithCodeVersion: matchedCode.version,
+        activatedWithCodeDisplay: `${rawLabel} • Kode Aktivasi Unik Mahasiswa`,
+        passwordHash: pwdHash,
+        activatedAt: nowIso,
+      });
+      if (fullStudent) {
+        fullStudent.activationCert = certToken;
+      }
+
       const token = await signWorkerSession(
         env,
         {
@@ -1141,10 +1363,49 @@ export async function handleApiRequest(
         },
         200,
         {
-          'Set-Cookie': makeCookieHeader(request, 'hw_student_session', token, 86400 * 30),
+          'Set-Cookie': [
+            makeCookieHeader(request, 'hw_student_session', token, 86400 * 30),
+            makeCookieHeader(request, 'hw_student_registry', certToken, 86400 * 365),
+          ],
         }
       );
     });
+  }
+
+  // 2C. Server-Side Character Voice TTS on Edge Worker (/api/tts/speak)
+  if (path === '/api/tts/speak' && (method === 'POST' || method === 'GET')) {
+    const body: any = method === 'POST' ? await request.json().catch(() => ({})) : {};
+    const rawText = String(body.text || url.searchParams.get('text') || '').trim();
+    const lang = String(body.lang || url.searchParams.get('lang') || 'id-ID');
+    if (!rawText) {
+      return jsonResponse({ error: 'Teks dialog wajib diisi.' }, 400);
+    }
+    const clippedText = rawText.slice(0, 240);
+    const tl = lang.toLowerCase().startsWith('en') ? 'en' : 'id';
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${tl}&q=${encodeURIComponent(clippedText)}`;
+    try {
+      const upstream = await fetch(ttsUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        },
+      });
+      if (upstream.ok) {
+        const arrBuf = await upstream.arrayBuffer();
+        if (arrBuf.byteLength > 256) {
+          return new Response(arrBuf, {
+            status: 200,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Cache-Control': 'public, max-age=86400',
+            },
+          });
+        }
+      }
+    } catch {
+      // Ignore upstream errors
+    }
+    return jsonResponse({ fallback: 'client_synth' }, 204);
   }
 
   // 3. Quiz Questions: GET /api/quiz/questions

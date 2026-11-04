@@ -72,7 +72,8 @@ export function normalizeActivationCode(rawInput: unknown): string {
 
 /**
  * Canonical normalization for Student NPM / NIM:
- * - Removes invisible Unicode characters and internal spaces
+ * - Always stored and processed as a trimmed STRING (never cast to Number, preserving leading zeros)
+ * - Removes invisible Unicode characters, spaces, dots, and slashes
  * - Normalizes dashes and converts to uppercase
  */
 export function normalizeNpm(rawInput: unknown): string {
@@ -80,7 +81,7 @@ export function normalizeNpm(rawInput: unknown): string {
   return String(rawInput)
     .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
     .replace(/[–—−‐‑‒]/g, '-')
-    .replace(/\s+/g, '')
+    .replace(/[\s./]+/g, '')
     .trim()
     .toUpperCase();
 }
@@ -95,6 +96,66 @@ export function hashCode(value: string): string {
 
 export function hashActivationCode(value: string): string {
   return hashCode(normalizeActivationCode(value));
+}
+
+export function extractPasswordHashFromToken(sessionToken: string | null | undefined): string | null {
+  if (!sessionToken) return null;
+  const match = String(sessionToken).match(/\|pwd:([a-f0-9]{64})/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+export function buildEntitlementSessionToken(
+  npm: string,
+  codeLabel: string,
+  passwordHash?: string | null
+): string {
+  const base = `lifetime_${npm}_${hashActivationCode(codeLabel || npm).slice(0, 12)}`;
+  if (passwordHash && /^[a-f0-9]{64}$/i.test(passwordHash)) {
+    return `${base}|pwd:${passwordHash.toLowerCase()}`;
+  }
+  return base;
+}
+
+export interface ActivationCertificatePayload {
+  npm: string;
+  studentName: string;
+  className: string;
+  avatarGender: 'male_atlm' | 'female_atlm';
+  activatedWithCodeVersion: number;
+  activatedWithCodeDisplay: string;
+  passwordHash?: string | null;
+  activatedAt: string;
+}
+
+export function signActivationCertificate(payload: ActivationCertificatePayload): string {
+  const dataB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const sig = crypto
+    .createHmac('sha256', SESSION_SECRET_KEY)
+    .update(`cert:${dataB64}`)
+    .digest('base64url');
+  return `${dataB64}.${sig}`;
+}
+
+export function verifyActivationCertificate(
+  certToken: string | undefined | null
+): ActivationCertificatePayload | null {
+  if (!certToken || typeof certToken !== 'string' || !certToken.includes('.')) return null;
+  const [dataB64, sig] = certToken.split('.');
+  if (!dataB64 || !sig) return null;
+  const expectedSig = crypto
+    .createHmac('sha256', SESSION_SECRET_KEY)
+    .update(`cert:${dataB64}`)
+    .digest('base64url');
+  if (!safeCompareHex(sig, expectedSig)) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(dataB64, 'base64url').toString('utf8')
+    ) as ActivationCertificatePayload;
+    if (!parsed || !parsed.npm) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 // In-process async mutex lock to serialize concurrent activation/generation operations
@@ -632,64 +693,140 @@ async function ensureDatabaseSeeded(): Promise<void> {
 }
 
 /**
- * Self-Healing Account Integrity & Recovery Helper:
- * Ensures that if a student exists in ANY of studentEntitlements, studentProfiles, or
- * a used studentAccessCodes row, their complete account (users, studentEntitlements,
- * studentProfiles, avatarSettings) is repaired and synchronized in PostgreSQL.
+ * Self-Healing Account Integrity & Multi-Table Reconciliation Helper:
+ * Ensures that if a student exists in ANY of studentEntitlements, studentProfiles,
+ * users, a used studentAccessCodes row, quizAttempts, leaderboard, avatarSettings,
+ * or a signed activation certificate, their complete account is reconciled and active
+ * in PostgreSQL without requiring re-activation or creating duplicate accounts.
  */
-async function findAndHealStudentByNpm(rawNpm: string) {
+async function findAndHealStudentByNpm(
+  rawNpm: string,
+  req?: express.Request,
+  suppliedCert?: string
+) {
   const cleanNpm = normalizeNpm(rawNpm);
   if (!cleanNpm) return null;
 
-  // 1. Case-insensitive search in studentEntitlements
-  const allEntitlements = await db
-    .select()
-    .from(studentEntitlements)
-    .where(sql`UPPER(TRIM(${studentEntitlements.npm})) = ${cleanNpm}`);
+  // 1. Search in studentEntitlements (normalized string match)
+  const allEntitlements = await db.select().from(studentEntitlements);
+  const matchedEntitlements = allEntitlements.filter(
+    (e) => normalizeNpm(e.npm) === cleanNpm
+  );
 
-  // 2. Case-insensitive search in studentProfiles
-  const allProfiles = await db
-    .select()
-    .from(studentProfiles)
-    .where(sql`UPPER(TRIM(${studentProfiles.npm})) = ${cleanNpm}`);
+  // 2. Search in studentProfiles
+  const allProfiles = await db.select().from(studentProfiles);
+  const matchedProfiles = allProfiles.filter(
+    (p) => normalizeNpm(p.npm) === cleanNpm
+  );
 
   // 3. Search in studentAccessCodes for any code bound to this NPM
   const allCodes = await db.select().from(studentAccessCodes);
   const boundCode = allCodes.find((c) => {
     const npmTag = c.className.match(/\[NPM:([^\]]+)\]/i)?.[1];
-    const dispNpm = c.codeDisplay.match(/NPM\s+([A-Za-z0-9_-]+)/i)?.[1];
+    const dispNpm = c.codeDisplay.match(/NPM\s+([A-Za-z0-9_.-]+)/i)?.[1];
     return (
       (npmTag && normalizeNpm(npmTag) === cleanNpm) ||
       (dispNpm && normalizeNpm(dispNpm) === cleanNpm)
     );
   });
 
-  if (allEntitlements.length === 0 && allProfiles.length === 0 && !boundCode) {
+  // 4. Search in users table (uid = student_<NPM>), quizAttempts, or leaderboard
+  const allUsers = await db.select().from(users);
+  const matchedUser = allUsers.find((u) => {
+    if (u.role !== 'student') return false;
+    const extracted = u.uid.replace(/^student_/i, '');
+    return normalizeNpm(extracted) === cleanNpm;
+  });
+
+  const allAttempts = await db
+    .select()
+    .from(quizAttempts)
+    .where(sql`UPPER(TRIM(${quizAttempts.npm})) = ${cleanNpm}`)
+    .limit(1);
+
+  const allLeaderboard = await db
+    .select()
+    .from(leaderboard)
+    .where(sql`UPPER(TRIM(${leaderboard.npm})) = ${cleanNpm}`)
+    .limit(1);
+
+  // 5. Check signed activation certificate from request body or long-lived registry cookie
+  let verifiedCert: ActivationCertificatePayload | null = null;
+  if (suppliedCert) {
+    const c = verifyActivationCertificate(suppliedCert);
+    if (c && normalizeNpm(c.npm) === cleanNpm) verifiedCert = c;
+  }
+  if (!verifiedCert && req) {
+    const cookies = parseCookies(req);
+    const cookieCert = verifyActivationCertificate(cookies['hw_student_registry']);
+    if (cookieCert && normalizeNpm(cookieCert.npm) === cleanNpm) {
+      verifiedCert = cookieCert;
+    }
+  }
+
+  const hasAnyRecord =
+    matchedEntitlements.length > 0 ||
+    matchedProfiles.length > 0 ||
+    Boolean(boundCode) ||
+    Boolean(matchedUser) ||
+    allAttempts.length > 0 ||
+    allLeaderboard.length > 0 ||
+    Boolean(verifiedCert);
+
+  if (!hasAnyRecord) {
     return null;
   }
 
-  let entitlement = allEntitlements[0] || null;
-  let profile = allProfiles[0] || null;
+  let entitlement: typeof matchedEntitlements[number] | null = matchedEntitlements[0] || null;
+  let profile: typeof matchedProfiles[number] | null = matchedProfiles[0] || null;
 
-  const resolvedNpm = entitlement?.npm || profile?.npm || cleanNpm;
+  const resolvedNpm = cleanNpm;
   const resolvedName =
     profile?.fullName ||
     entitlement?.studentName ||
     boundCode?.codeDisplay.match(/\(([^)]+)\)\s*$/)?.[1] ||
+    allAttempts[0]?.studentName ||
+    allLeaderboard[0]?.studentName ||
+    verifiedCert?.studentName ||
     `Mahasiswa ATLM (${resolvedNpm})`;
   const resolvedClass =
     profile?.className ||
     boundCode?.className.split('[NPM:')[0].trim() ||
+    allAttempts[0]?.className ||
+    verifiedCert?.className ||
     'ATLM Reguler - IKES Rajawali';
   const resolvedVersion =
-    boundCode?.version || entitlement?.activatedWithCodeVersion || 1;
+    boundCode?.version ||
+    entitlement?.activatedWithCodeVersion ||
+    verifiedCert?.activatedWithCodeVersion ||
+    1;
   const resolvedCodeLabel = boundCode
     ? `${extractRawCodeFromDisplay(boundCode.codeDisplay)} • Kode Aktivasi Unik Mahasiswa`
-    : entitlement?.activatedWithCodeDisplay || `ATLM-IKES-${String(resolvedVersion).padStart(3, '0')} • Kode Aktivasi Unik Mahasiswa`;
+    : entitlement?.activatedWithCodeDisplay ||
+      verifiedCert?.activatedWithCodeDisplay ||
+      `ATLM-IKES-${String(resolvedVersion).padStart(3, '0')} • Kode Aktivasi Unik Mahasiswa`;
 
-  // Auto-heal missing entitlement if student existed in profiles or bound code
+  // Normalize entitlement NPM string if it had whitespace or formatting differences
+  if (entitlement && entitlement.npm !== resolvedNpm) {
+    try {
+      const [updatedEnt] = await db
+        .update(studentEntitlements)
+        .set({ npm: resolvedNpm })
+        .where(eq(studentEntitlements.id, entitlement.id))
+        .returning();
+      if (updatedEnt) entitlement = updatedEnt;
+    } catch {
+      // Ignore if conflict
+    }
+  }
+
+  // Auto-heal missing entitlement if student existed in profiles, bound code, attempts, users, or cert
   if (!entitlement) {
-    const internalToken = `lifetime_${resolvedNpm}_${hashCode(resolvedCodeLabel).slice(0, 12)}`;
+    const internalToken = buildEntitlementSessionToken(
+      resolvedNpm,
+      resolvedCodeLabel,
+      verifiedCert?.passwordHash || null
+    );
     const [insertedEnt] = await db
       .insert(studentEntitlements)
       .values({
@@ -706,12 +843,8 @@ async function findAndHealStudentByNpm(rawNpm: string) {
     if (insertedEnt) {
       entitlement = insertedEnt;
     } else {
-      const refetched = await db
-        .select()
-        .from(studentEntitlements)
-        .where(sql`UPPER(TRIM(${studentEntitlements.npm})) = ${cleanNpm}`)
-        .limit(1);
-      entitlement = refetched[0] || null;
+      const refetched = await db.select().from(studentEntitlements);
+      entitlement = refetched.find((e) => normalizeNpm(e.npm) === resolvedNpm) || null;
     }
   }
 
@@ -731,7 +864,7 @@ async function findAndHealStudentByNpm(rawNpm: string) {
     profile = insertedProf || null;
   }
 
-  // Ensure users & avatarSettings exist
+  // Ensure users & avatarSettings exist and are linked to resolvedNpm
   await db
     .insert(users)
     .values({
@@ -745,7 +878,7 @@ async function findAndHealStudentByNpm(rawNpm: string) {
     .insert(avatarSettings)
     .values({
       npm: resolvedNpm,
-      gender: 'female_atlm',
+      gender: verifiedCert?.avatarGender || 'female_atlm',
       hairStyle: 'modern',
       skinTone: '#f1c27d',
       uniformType: 'lab_coat',
@@ -759,6 +892,7 @@ async function findAndHealStudentByNpm(rawNpm: string) {
     profile,
     boundCode,
     resolvedNpm,
+    wasReconciled: matchedEntitlements.length === 0 || matchedProfiles.length === 0 || !matchedUser,
   };
 }
 
@@ -934,23 +1068,40 @@ async function buildFullStudentPayload(npm: string) {
   }
 
   const pureActivatedCode = extractRawCodeFromDisplay(ent.activatedWithCodeDisplay);
+  const storedPasswordHash = extractPasswordHashFromToken(ent.sessionToken);
+  const avatarGender =
+    avatarRows[0]?.gender === 'male_atlm' ? ('male_atlm' as const) : ('female_atlm' as const);
+  const activationCert = signActivationCertificate({
+    npm: ent.npm,
+    studentName: profile?.fullName || ent.studentName,
+    className: profile?.className || 'ATLM Reguler - IKES Rajawali',
+    avatarGender,
+    activatedWithCodeVersion: ent.activatedWithCodeVersion,
+    activatedWithCodeDisplay: ent.activatedWithCodeDisplay,
+    passwordHash: storedPasswordHash,
+    activatedAt:
+      ent.activatedAt instanceof Date ? ent.activatedAt.toISOString() : String(ent.activatedAt),
+  });
 
   return {
     npm: ent.npm,
     fullName: profile?.fullName || ent.studentName,
     className: profile?.className || 'ATLM Reguler - IKES Rajawali',
-    avatarGender:
-      avatarRows[0]?.gender === 'male_atlm' ? ('male_atlm' as const) : ('female_atlm' as const),
+    avatarGender,
     xp: profile?.xp || 100,
     level: profile?.level || 1,
     highestScore: profile?.highestScore || 0,
     bestAccuracy,
     quizCount: attempts.length || profile?.quizCount || 0,
     isLifetimeActive: ent.isLifetimeActive,
+    accountStatus: ent.isLifetimeActive ? 'Sudah Teraktivasi • Aktif' : 'Nonaktif',
+    codeStatus: 'Sudah Digunakan',
+    hasPassword: Boolean(storedPasswordHash),
     activatedWithVersion: ent.activatedWithCodeVersion,
     activatedWithCodeDisplay: pureActivatedCode,
     activatedCode: pureActivatedCode,
     activatedAt: ent.activatedAt,
+    activationCert,
     avatar: avatarRows[0] || null,
     achievements: studentBadges,
     completedModules: Array.from(new Set(studentModProgress.map((p) => p.moduleNumber))),
@@ -1173,14 +1324,74 @@ async function startServer() {
   });
 
   // =========================================================================
-  // 2. STUDENT LIFETIME ACCESS ACTIVATION & RETURNING LOGIN (ATOMIC & SELF-HEALING)
+  // 2. STUDENT LIFETIME ACCESS ACTIVATION, LOGIN & ACCOUNT RECOVERY
   // =========================================================================
+  app.post('/api/auth/student/check-npm', async (req, res) => {
+    try {
+      const rawNpm = req.body?.npm;
+      const cleanNpm = normalizeNpm(rawNpm);
+      if (!cleanNpm || cleanNpm.length < 3) {
+        return res.status(400).json({
+          exists: false,
+          error: 'Nomor Pokok Mahasiswa (NPM) wajib diisi dengan benar.',
+        });
+      }
+
+      const healed = await findAndHealStudentByNpm(cleanNpm, req, req.body?.activationCert);
+      if (!healed || !healed.entitlement) {
+        return res.status(404).json({
+          exists: false,
+          npm: cleanNpm,
+          accountStatus: 'Belum Terdaftar',
+          error: 'NPM belum memiliki akun. Silakan lakukan aktivasi terlebih dahulu.',
+        });
+      }
+
+      const ent = healed.entitlement;
+      if (!ent.isLifetimeActive) {
+        return res.status(403).json({
+          exists: true,
+          npm: healed.resolvedNpm,
+          accountStatus: 'Nonaktif',
+          codeStatus: 'Sudah Digunakan',
+          error: 'Akun Anda sedang dinonaktifkan. Silakan hubungi dosen.',
+        });
+      }
+
+      const hasPassword = Boolean(extractPasswordHashFromToken(ent.sessionToken));
+      return res.json({
+        exists: true,
+        npm: healed.resolvedNpm,
+        studentName: healed.profile?.fullName || ent.studentName,
+        className: healed.profile?.className || 'ATLM Reguler - IKES Rajawali',
+        accountStatus: 'Sudah Teraktivasi',
+        isActive: true,
+        codeStatus: 'Sudah Digunakan',
+        activatedCode: extractRawCodeFromDisplay(ent.activatedWithCodeDisplay),
+        hasPassword,
+        wasReconciled: healed.wasReconciled,
+        message: 'Akun berhasil ditemukan. Silakan melanjutkan proses login.',
+      });
+    } catch (error) {
+      console.error('Check NPM error:', error);
+      return res.status(500).json({
+        error: 'Terjadi gangguan koneksi. Silakan coba kembali.',
+      });
+    }
+  });
+
   const handleStudentActivateOrLogin = async (req: express.Request, res: express.Response) => {
     const rawBody = req.body || {};
     const cleanNpm = normalizeNpm(rawBody.npm);
-    const cleanName = String(rawBody.fullName || '').trim();
+    const cleanName = String(rawBody.fullName || rawBody.studentName || rawBody.name || '').trim();
     const cleanClass = String(rawBody.className || 'ATLM Reguler - IKES Rajawali').trim();
-    const cleanCode = normalizeActivationCode(rawBody.accessCode);
+    const cleanCode = normalizeActivationCode(
+      rawBody.accessCode || rawBody.activationCode || rawBody.code
+    );
+    const rawPassword =
+      typeof (rawBody.password || rawBody.newPassword) === 'string'
+        ? String(rawBody.password || rawBody.newPassword).trim()
+        : '';
     const selectedGender = rawBody.avatarGender === 'male_atlm' ? 'male_atlm' : 'female_atlm';
     const mode = String(rawBody.mode || (cleanCode ? 'activate' : 'login')).toLowerCase();
 
@@ -1204,7 +1415,15 @@ async function startServer() {
 
     return withAsyncLock(lockKey, async () => {
       try {
-        // STEP 1: If an activation code was supplied, validate it against the main database
+        // STEP 1: Check if this student (NPM) ALREADY has an activated account (with multi-table self-healing)
+        // Note: For login & recovery, we NEVER require an unused activation code—a used code proves the account is already active!
+        const existingAccount = await findAndHealStudentByNpm(
+          cleanNpm,
+          req,
+          rawBody.activationCert
+        );
+
+        // Validate supplied activation code ONLY if provided
         let matchedCodeRecord: typeof studentAccessCodes.$inferSelect | null = null;
         if (cleanCode) {
           if (cleanCode.length < 4) {
@@ -1217,7 +1436,6 @@ async function startServer() {
           const inputCodeHash = hashActivationCode(cleanCode);
           const allCodes = await db.select().from(studentAccessCodes);
 
-          // Match either by exact normalized SHA-256 hash OR by normalized pure code prefix in codeDisplay
           matchedCodeRecord =
             allCodes.find(
               (c) =>
@@ -1232,7 +1450,6 @@ async function startServer() {
             });
           }
 
-          // Auto-sync codeHash if it was matched by normalized display string
           if (matchedCodeRecord.codeHash !== inputCodeHash) {
             await db
               .update(studentAccessCodes)
@@ -1241,9 +1458,8 @@ async function startServer() {
             matchedCodeRecord.codeHash = inputCodeHash;
           }
 
-          // Check if this code is already bound to another student's NPM
           const npmTagMatch = matchedCodeRecord.className.match(/\[NPM:([^\]]+)\]/i);
-          const displayNpmMatch = matchedCodeRecord.codeDisplay.match(/NPM\s+([A-Za-z0-9_-]+)/i);
+          const displayNpmMatch = matchedCodeRecord.codeDisplay.match(/NPM\s+([A-Za-z0-9_.-]+)/i);
           const boundNpm = normalizeNpm(npmTagMatch?.[1] || displayNpmMatch?.[1] || '');
 
           if (boundNpm && boundNpm !== cleanNpm) {
@@ -1254,7 +1470,6 @@ async function startServer() {
             });
           }
 
-          // Also check if another student entitlement already claimed this specific code display
           const pureCode = extractRawCodeFromDisplay(matchedCodeRecord.codeDisplay);
           const allEnts = await db.select().from(studentEntitlements);
           const otherOwner = allEnts.find(
@@ -1271,57 +1486,92 @@ async function startServer() {
           }
         }
 
-        // STEP 2: Check if this student (NPM) ALREADY has an activated account (with self-healing across tables)
-        const existingAccount = await findAndHealStudentByNpm(cleanNpm);
-
+        // STEP 2: Returning Student Login or Account Recovery (Account ALREADY exists!)
         if (existingAccount && existingAccount.entitlement) {
           const entitlement = existingAccount.entitlement;
           const resolvedNpm = existingAccount.resolvedNpm;
 
           if (!entitlement.isLifetimeActive) {
             return res.status(403).json({
-              error: 'Status akun mahasiswa ini sedang dinonaktifkan sementara oleh Dosen Pengampu.',
+              error: 'Akun Anda sedang dinonaktifkan. Silakan hubungi dosen.',
             });
           }
 
-          // If the student is already active and accidentally tried to use a DIFFERENT unused code on the activate tab,
-          // do NOT consume the new code — inform them or log them in if they used their own code
-          if (cleanCode && matchedCodeRecord) {
-            const existingPureCode = extractRawCodeFromDisplay(entitlement.activatedWithCodeDisplay);
-            const submittedPureCode = extractRawCodeFromDisplay(matchedCodeRecord.codeDisplay);
+          const storedPwdHash = extractPasswordHashFromToken(entitlement.sessionToken);
 
-            if (
-              existingPureCode &&
-              submittedPureCode &&
-              existingPureCode !== submittedPureCode &&
-              matchedCodeRecord.activatedCount === 0
-            ) {
-              // Student is already active! Log them in without consuming the new unused code
+          // Handle Account Recovery Mode (allows resetting/setting password for already-activated NPM without needing a new code)
+          if (mode === 'recover') {
+            const newPwdHash = rawPassword ? hashCode(rawPassword) : storedPwdHash;
+            const updatedSessionToken = buildEntitlementSessionToken(
+              resolvedNpm,
+              entitlement.activatedWithCodeDisplay,
+              newPwdHash
+            );
+
+            await db
+              .update(studentEntitlements)
+              .set({
+                sessionToken: updatedSessionToken,
+                isLifetimeActive: true,
+                lastAccessedAt: new Date(),
+              })
+              .where(eq(studentEntitlements.id, entitlement.id));
+
+            if (cleanName && cleanName.length >= 2 && existingAccount.profile) {
               await db
-                .update(studentEntitlements)
-                .set({ lastAccessedAt: new Date() })
-                .where(eq(studentEntitlements.id, entitlement.id));
+                .update(studentProfiles)
+                .set({
+                  fullName: cleanName,
+                  className: cleanClass || existingAccount.profile.className,
+                  updatedAt: new Date(),
+                })
+                .where(eq(studentProfiles.id, existingAccount.profile.id));
+            }
 
-              clearFailedAttempts(rateKey);
-              const fullStudent = await buildFullStudentPayload(resolvedNpm);
-              const sessionToken = signSessionToken({
-                role: 'student',
-                sub: resolvedNpm,
-                name: fullStudent?.fullName || entitlement.studentName,
-                className: fullStudent?.className || cleanClass,
-              });
-              setAuthCookie(req, res, 'hw_student_session', sessionToken, 86400 * 30);
+            clearFailedAttempts(rateKey);
+            const fullStudent = await buildFullStudentPayload(resolvedNpm);
+            const sessionToken = signSessionToken({
+              role: 'student',
+              sub: resolvedNpm,
+              name: fullStudent?.fullName || entitlement.studentName,
+              className: fullStudent?.className || cleanClass,
+            });
+            setAuthCookie(req, res, 'hw_student_session', sessionToken, 86400 * 30);
+            if (fullStudent?.activationCert) {
+              setAuthCookie(req, res, 'hw_student_registry', fullStudent.activationCert, 86400 * 365);
+            }
 
-              return res.json({
-                success: true,
-                isExistingLifetime: true,
-                message: `Akun NPM ${resolvedNpm} sudah aktif permanen sebelumnya (Kode ${matchedCodeRecord ? submittedPureCode : ''} tidak dikonsumsi ulang). Selamat datang kembali, ${fullStudent?.fullName || entitlement.studentName}!`,
-                student: fullStudent,
+            return res.json({
+              success: true,
+              isExistingLifetime: true,
+              wasRecovered: true,
+              message: `Akun berhasil ditemukan dan dipulihkan. Selamat datang kembali, ${fullStudent?.fullName || entitlement.studentName}!`,
+              student: fullStudent,
+            });
+          }
+
+          // Standard Login Mode: Verify password if the account has a password set and a password was submitted
+          if (mode === 'login' && storedPwdHash && rawPassword.length > 0) {
+            const inputPwdHash = hashCode(rawPassword);
+            if (!safeCompareHex(inputPwdHash, storedPwdHash)) {
+              recordFailedAttempt(rateKey, 10);
+              return res.status(401).json({
+                error: 'NPM atau password tidak sesuai.',
               });
             }
           }
 
-          // Update profile name/class if supplied during re-login/recovery
+          // If the account didn't have a password yet and the student provided one during login/activation, bind it now
+          let nextSessionToken = entitlement.sessionToken;
+          if (!storedPwdHash && rawPassword.length >= 3) {
+            nextSessionToken = buildEntitlementSessionToken(
+              resolvedNpm,
+              entitlement.activatedWithCodeDisplay,
+              hashCode(rawPassword)
+            );
+          }
+
+          // Update profile name/class if supplied
           if (cleanName && cleanName.length >= 2 && existingAccount.profile) {
             await db
               .update(studentProfiles)
@@ -1335,7 +1585,10 @@ async function startServer() {
 
           await db
             .update(studentEntitlements)
-            .set({ lastAccessedAt: new Date() })
+            .set({
+              sessionToken: nextSessionToken,
+              lastAccessedAt: new Date(),
+            })
             .where(eq(studentEntitlements.id, entitlement.id));
 
           clearFailedAttempts(rateKey);
@@ -1349,22 +1602,25 @@ async function startServer() {
           });
 
           setAuthCookie(req, res, 'hw_student_session', sessionToken, 86400 * 30);
+          if (fullStudent?.activationCert) {
+            setAuthCookie(req, res, 'hw_student_registry', fullStudent.activationCert, 86400 * 365);
+          }
 
           return res.json({
             success: true,
             isExistingLifetime: true,
-            message: `Selamat datang kembali, ${fullStudent?.fullName || entitlement.studentName}! Sesi Akses Seumur Hidup Anda aktif.`,
+            message: `Akun berhasil ditemukan. Selamat datang kembali, ${fullStudent?.fullName || entitlement.studentName}!`,
             student: fullStudent,
           });
         }
 
-        // STEP 3: New Student Activation (Account does not exist yet)
-        if (!cleanCode || !matchedCodeRecord) {
+        // STEP 3: Account does NOT exist in any table
+        if (mode === 'login' || mode === 'recover' || !cleanCode || !matchedCodeRecord) {
           recordFailedAttempt(rateKey, 10);
           return res.status(404).json({
             error:
-              mode === 'login'
-                ? `Akun mahasiswa dengan NPM ${cleanNpm} belum diaktifkan. Silakan lakukan aktivasi pertama kali menggunakan Kode Aktivasi Unik dari Dosen.`
+              mode === 'login' || mode === 'recover'
+                ? 'NPM belum memiliki akun. Silakan lakukan aktivasi terlebih dahulu.'
                 : 'Kode aktivasi wajib diisi untuk mengaktifkan akun mahasiswa baru.',
           });
         }
@@ -1387,11 +1643,11 @@ async function startServer() {
         const effectiveName =
           cleanName && cleanName.length >= 2 ? cleanName : `Mahasiswa ATLM (${cleanNpm})`;
         const rawCodeLabel = extractRawCodeFromDisplay(matchedCodeRecord.codeDisplay) || cleanCode;
-        const internalToken = `lifetime_${cleanNpm}_${hashActivationCode(rawCodeLabel).slice(0, 12)}`;
+        const pwdHash = rawPassword.length >= 3 ? hashCode(rawPassword) : null;
+        const internalToken = buildEntitlementSessionToken(cleanNpm, rawCodeLabel, pwdHash);
 
         // STEP 4: Execute Atomic Database Transaction for Code Consumption + Account & Profile Creation
         await db.transaction(async (tx) => {
-          // Atomic conditional update: only succeeds if activated_count === 0 and is_active === true
           const claimedCodes = await tx
             .update(studentAccessCodes)
             .set({
@@ -1413,7 +1669,6 @@ async function startServer() {
             throw new Error('CODE_ALREADY_CLAIMED');
           }
 
-          // Create authentication user record
           await tx
             .insert(users)
             .values({
@@ -1423,7 +1678,6 @@ async function startServer() {
             })
             .onConflictDoNothing();
 
-          // Create permanent lifetime student entitlement linked to lecturer's code
           await tx
             .insert(studentEntitlements)
             .values({
@@ -1440,12 +1694,12 @@ async function startServer() {
                 studentName: effectiveName,
                 activatedWithCodeVersion: matchedCodeRecord!.version,
                 activatedWithCodeDisplay: `${rawCodeLabel} • Kode Aktivasi Unik Mahasiswa`,
+                sessionToken: internalToken,
                 isLifetimeActive: true,
                 lastAccessedAt: new Date(),
               },
             });
 
-          // Create permanent student profile
           await tx
             .insert(studentProfiles)
             .values({
@@ -1464,7 +1718,6 @@ async function startServer() {
               },
             });
 
-          // Create student avatar settings
           await tx
             .insert(avatarSettings)
             .values({
@@ -1478,7 +1731,6 @@ async function startServer() {
             })
             .onConflictDoNothing();
 
-          // Award lifetime activation badge
           await tx.insert(achievements).values({
             npm: cleanNpm,
             achievementCode: 'LIFETIME_ATLM_ACTIVATED',
@@ -1497,6 +1749,9 @@ async function startServer() {
         });
 
         setAuthCookie(req, res, 'hw_student_session', sessionToken, 86400 * 30);
+        if (fullStudent?.activationCert) {
+          setAuthCookie(req, res, 'hw_student_registry', fullStudent.activationCert, 86400 * 365);
+        }
 
         return res.json({
           success: true,
@@ -1515,15 +1770,139 @@ async function startServer() {
         }
         console.error('Student activation/login error:', error);
         return res.status(500).json({
-          error: 'Terjadi gangguan koneksi saat memproses aktivasi/login, silakan coba kembali.',
+          error: 'Terjadi gangguan koneksi. Silakan coba kembali.',
         });
       }
     });
   };
 
   app.post('/api/auth/student/activate', handleStudentActivateOrLogin);
+  app.post('/api/student-activate', handleStudentActivateOrLogin);
   app.post('/api/student-login', handleStudentActivateOrLogin);
   app.post('/api/auth/student/session', handleStudentActivateOrLogin);
+  app.post('/api/auth/student/recover', (req, res) => {
+    req.body = { ...(req.body || {}), mode: 'recover' };
+    return handleStudentActivateOrLogin(req, res);
+  });
+
+  // =========================================================================
+  // 2B. SERVER-SIDE NEURAL / STREAMED CHARACTER VOICE TTS (/api/tts/speak)
+  // Guarantees 100% Android Smartphone & Desktop Character Voice Compatibility
+  // =========================================================================
+  const serverTtsCache = new Map<string, { buffer: Buffer; contentType: string }>();
+
+  function buildFormantSpeechWavBuffer(text: string, gender: string): Buffer {
+    const sampleRate = 22050;
+    const words = String(text || 'Halo').trim().split(/\s+/).filter(Boolean);
+    const durationSec = Math.max(0.85, Math.min(8.5, words.length * 0.34));
+    const numSamples = Math.floor(sampleRate * durationSec);
+    const pcmData = Buffer.alloc(numSamples * 2);
+
+    const baseF0 = gender === 'female' ? 228 : 124;
+    const formant1 = gender === 'female' ? 780 : 520;
+    const formant2 = gender === 'female' ? 1760 : 1180;
+
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const syllableIndex = Math.floor(t / 0.17);
+      const syllablePhase = (t % 0.17) / 0.17;
+      const syllableEnv =
+        syllablePhase < 0.82 ? Math.sin((syllablePhase / 0.82) * Math.PI) : 0;
+
+      const inflect = 1 + Math.sin(t * 4.2 + syllableIndex * 0.7) * 0.06;
+      const f0 = baseF0 * inflect;
+
+      const fundamental = Math.sin(2 * Math.PI * f0 * t) * 0.55;
+      const harm2 = Math.sin(2 * Math.PI * f0 * 2 * t) * 0.25;
+      const f1Wave = Math.sin(2 * Math.PI * formant1 * t) * 0.14;
+      const f2Wave = Math.sin(2 * Math.PI * formant2 * t) * 0.06;
+
+      const sampleVal = (fundamental + harm2 + f1Wave + f2Wave) * syllableEnv * 0.55;
+      const intSample = Math.max(-32767, Math.min(32767, Math.floor(sampleVal * 32767)));
+      pcmData.writeInt16LE(intSample, i * 2);
+    }
+
+    const wavHeader = Buffer.alloc(44);
+    wavHeader.write('RIFF', 0);
+    wavHeader.writeUInt32LE(36 + pcmData.length, 4);
+    wavHeader.write('WAVE', 8);
+    wavHeader.write('fmt ', 12);
+    wavHeader.writeUInt32LE(16, 16);
+    wavHeader.writeUInt16LE(1, 20); // PCM
+    wavHeader.writeUInt16LE(1, 22); // Mono
+    wavHeader.writeUInt32LE(sampleRate, 24);
+    wavHeader.writeUInt32LE(sampleRate * 2, 28);
+    wavHeader.writeUInt16LE(2, 32);
+    wavHeader.writeUInt16LE(16, 34);
+    wavHeader.write('data', 36);
+    wavHeader.writeUInt32LE(pcmData.length, 40);
+
+    return Buffer.concat([wavHeader, pcmData]);
+  }
+
+  const handleServerTtsSpeak = async (req: express.Request, res: express.Response) => {
+    try {
+      const rawText = String(req.body?.text || req.query?.text || '').trim();
+      const lang = String(req.body?.lang || req.query?.lang || 'id-ID');
+      const gender = String(req.body?.gender || req.query?.gender || 'female');
+      if (!rawText) {
+        return res.status(400).json({ error: 'Teks dialog wajib diisi.' });
+      }
+
+      const clippedText = rawText.slice(0, 260);
+      const cacheKey = `${lang}:${gender}:${clippedText}`;
+      const cached = serverTtsCache.get(cacheKey);
+      if (cached) {
+        res.setHeader('Content-Type', cached.contentType);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(cached.buffer);
+      }
+
+      const tl = lang.toLowerCase().startsWith('en') ? 'en' : 'id';
+      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${tl}&q=${encodeURIComponent(clippedText)}`;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3200);
+        const upstream = await fetch(ttsUrl, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (upstream.ok) {
+          const arrBuf = await upstream.arrayBuffer();
+          const buf = Buffer.from(arrBuf);
+          if (buf.length > 256) {
+            if (serverTtsCache.size > 150) {
+              const firstKey = serverTtsCache.keys().next().value;
+              if (firstKey) serverTtsCache.delete(firstKey);
+            }
+            serverTtsCache.set(cacheKey, { buffer: buf, contentType: 'audio/mpeg' });
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.send(buf);
+          }
+        }
+      } catch {
+        // Fallback to synthesized formant WAV below
+      }
+
+      const fallbackWav = buildFormantSpeechWavBuffer(clippedText, gender);
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.send(fallbackWav);
+    } catch (error) {
+      console.error('TTS speak error:', error);
+      return res.status(500).json({ error: 'Gagal memproses audio suara karakter.' });
+    }
+  };
+
+  app.post('/api/tts/speak', handleServerTtsSpeak);
+  app.get('/api/tts/speak', handleServerTtsSpeak);
 
   // =========================================================================
   // 3. LECTURER ACCESS CODE MANAGEMENT (PROTECTED BY requireLecturerAuth)

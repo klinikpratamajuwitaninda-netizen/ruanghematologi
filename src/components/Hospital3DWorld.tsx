@@ -7,12 +7,18 @@ import {
   LabEquipmentItem,
   NpcCharacterData,
 } from '../data/clinicalSimulationData';
-import { soundManager } from '../utils/soundManager';
+import { soundManager, CharacterSpeakingState } from '../utils/soundManager';
+import {
+  getCharacterVoiceProfile,
+  detectDialogueEmotion,
+  EMOTION_PROSODY_MAP,
+} from '../utils/characterVoiceSystem';
 import {
   Compass,
   Microscope,
   MessageSquare,
   Volume2,
+  VolumeX,
   ChevronDown,
   ChevronUp,
   Sparkles,
@@ -158,11 +164,36 @@ function buildRobloxCharacter(options: {
   const eyeMat = new THREE.MeshBasicMaterial({ color: '#0f172a' });
   const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
   leftEye.position.set(-0.13, 2.05, 0.29);
+  leftEye.name = 'leftEye';
   group.add(leftEye);
 
   const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
   rightEye.position.set(0.13, 2.05, 0.29);
+  rightEye.name = 'rightEye';
   group.add(rightEye);
+
+  // Expressive Eyebrows (Animated during emotional speech)
+  const browGeo = new THREE.BoxGeometry(0.11, 0.025, 0.02);
+  const leftBrow = new THREE.Mesh(browGeo, hairMat);
+  leftBrow.position.set(-0.13, 2.13, 0.295);
+  leftBrow.name = 'leftBrow';
+  group.add(leftBrow);
+
+  const rightBrow = new THREE.Mesh(browGeo, hairMat);
+  rightBrow.position.set(0.13, 2.13, 0.295);
+  rightBrow.name = 'rightBrow';
+  group.add(rightBrow);
+
+  // Animated 3D Mouth for Lip-Sync (Synchronized with Character Voice Audio)
+  const mouthGeo = new THREE.BoxGeometry(0.15, 0.06, 0.03);
+  const mouthMat = new THREE.MeshBasicMaterial({
+    color: options.isFemale ? '#be123c' : '#7f1d1d',
+  });
+  const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+  mouth.position.set(0, 1.9, 0.295);
+  mouth.scale.set(1, 0.28, 1);
+  mouth.name = 'mouth';
+  group.add(mouth);
 
   // 8: Hair (Male vs Female styling)
   const topHairGeo = new THREE.BoxGeometry(0.64, 0.22, 0.64);
@@ -176,6 +207,21 @@ function buildRobloxCharacter(options: {
     backHair.position.set(0, 1.92, -0.26);
     group.add(backHair);
   }
+
+  // 9: Floating 3D Voice Wave Halo (Visible when this NPC is speaking)
+  const haloGeo = new THREE.RingGeometry(0.32, 0.42, 24);
+  const haloMat = new THREE.MeshBasicMaterial({
+    color: '#38bdf8',
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.85,
+  });
+  const speakingHalo = new THREE.Mesh(haloGeo, haloMat);
+  speakingHalo.rotation.x = Math.PI / 2;
+  speakingHalo.position.set(0, 2.52, 0);
+  speakingHalo.visible = false;
+  speakingHalo.name = 'speakingHalo';
+  group.add(speakingHalo);
 
   return group;
 }
@@ -446,6 +492,39 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
   const [activeNpc, setActiveNpc] = useState<NpcCharacterData | null>(null);
   const [npcDialogueIndex, setNpcDialogueIndex] = useState(0);
   const [dialogueLang, setDialogueLang] = useState<'id' | 'en'>('id');
+  const [speakingState, setSpeakingState] = useState<CharacterSpeakingState>(
+    soundManager.getSpeakingState()
+  );
+  const [audioSettingsState, setAudioSettingsState] = useState(soundManager.getSettings());
+
+  // Subscribe to real-time character voice & lip-sync state
+  useEffect(() => {
+    const unsubscribe = soundManager.subscribeSpeakingState((st) => {
+      setSpeakingState({ ...st });
+      setAudioSettingsState(soundManager.getSettings());
+    });
+    return () => {
+      unsubscribe();
+      soundManager.stopSpeaking();
+    };
+  }, []);
+
+  // Automatically play character voice when NPC dialogue opens or changes, and stop when closed
+  useEffect(() => {
+    if (!activeNpc) {
+      soundManager.stopSpeaking();
+      return;
+    }
+    const dialogueObj = activeNpc.dialogues[npcDialogueIndex];
+    if (!dialogueObj) return;
+    const text = dialogueLang === 'id' ? dialogueObj.id : dialogueObj.en;
+    soundManager.speakCharacterDialogue({
+      text,
+      characterId: activeNpc.id,
+      characterName: activeNpc.name,
+      lang: dialogueLang === 'id' ? 'id-ID' : 'en-US',
+    });
+  }, [activeNpc, npcDialogueIndex, dialogueLang]);
 
   const [nearbyTarget, setNearbyTarget] = useState<{
     type: 'equipment' | 'npc';
@@ -1330,8 +1409,100 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         }
       }
 
+      const liveSpeech = soundManager.getSpeakingState();
       for (let i = 0; i < npcMeshes.length; i++) {
-        npcMeshes[i].group.position.y = Math.abs(Math.sin(elapsed * 1.4 + i)) * 0.04;
+        const entry = npcMeshes[i];
+        const npcGroup = entry.group;
+        const isThisNpcSpeaking =
+          liveSpeech.isSpeaking && liveSpeech.characterId === entry.npc.id;
+
+        const mouthObj = npcGroup.getObjectByName('mouth');
+        const headObj = npcGroup.getObjectByName('head');
+        const leftBrowObj = npcGroup.getObjectByName('leftBrow');
+        const rightBrowObj = npcGroup.getObjectByName('rightBrow');
+        const leftArmObj = npcGroup.getObjectByName('leftArm');
+        const rightArmObj = npcGroup.getObjectByName('rightArm');
+        const haloObj = npcGroup.getObjectByName('speakingHalo');
+
+        if (isThisNpcSpeaking) {
+          // Smoothly turn NPC toward the student avatar during conversation
+          const dx = playerPosRef.current.x - npcGroup.position.x;
+          const dz = playerPosRef.current.z - npcGroup.position.z;
+          const targetYaw = Math.atan2(dx, dz);
+          let yawDiff = targetYaw - npcGroup.rotation.y;
+          while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+          while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+          npcGroup.rotation.y += yawDiff * Math.min(1, dt * 8);
+
+          // Expressive 3D Lip-Sync mouth movement
+          if (mouthObj) {
+            const openAmt = Math.max(0.15, liveSpeech.mouthOpenness);
+            mouthObj.scale.y = THREE.MathUtils.lerp(mouthObj.scale.y, 0.35 + openAmt * 2.35, dt * 24);
+            mouthObj.scale.x = THREE.MathUtils.lerp(mouthObj.scale.x, 0.88 + openAmt * 0.35, dt * 20);
+          }
+
+          // Expressive head nod & emotional tilt
+          if (headObj) {
+            const nod = Math.sin(elapsed * 6.8) * 0.055 * (liveSpeech.gestureIntensity || 1);
+            const tilt = (liveSpeech.headTiltRad || 0) + Math.sin(elapsed * 2.8) * 0.025;
+            headObj.rotation.x = THREE.MathUtils.lerp(headObj.rotation.x, nod, dt * 12);
+            headObj.rotation.z = THREE.MathUtils.lerp(headObj.rotation.z, tilt, dt * 10);
+          }
+
+          // Eyebrow emotional expression
+          if (leftBrowObj && rightBrowObj) {
+            const browLift =
+              liveSpeech.emotion === 'Surprised' || liveSpeech.emotion === 'Curious'
+                ? 2.155
+                : liveSpeech.emotion === 'Serious' || liveSpeech.emotion === 'Angry'
+                ? 2.115
+                : 2.135;
+            leftBrowObj.position.y = THREE.MathUtils.lerp(leftBrowObj.position.y, browLift, dt * 12);
+            rightBrowObj.position.y = THREE.MathUtils.lerp(rightBrowObj.position.y, browLift, dt * 12);
+          }
+
+          // Natural hand gestures while speaking
+          if (rightArmObj && leftArmObj) {
+            const gestureWave = Math.abs(Math.sin(elapsed * 5.2)) * 0.38 * (liveSpeech.gestureIntensity || 1);
+            rightArmObj.rotation.x = THREE.MathUtils.lerp(rightArmObj.rotation.x, -0.32 - gestureWave, dt * 12);
+            leftArmObj.rotation.x = THREE.MathUtils.lerp(
+              leftArmObj.rotation.x,
+              -0.12 - Math.abs(Math.cos(elapsed * 4.1)) * 0.2,
+              dt * 10
+            );
+          }
+
+          if (haloObj) {
+            haloObj.visible = true;
+            const pulse = 1 + Math.sin(elapsed * 7.5) * 0.18;
+            haloObj.scale.set(pulse, pulse, 1);
+            haloObj.rotation.z = elapsed * 2.2;
+          }
+
+          npcGroup.position.y = Math.abs(Math.sin(elapsed * 3.2)) * 0.06;
+        } else {
+          // Return immediately to calm idle pose when not speaking
+          if (mouthObj) {
+            mouthObj.scale.y = THREE.MathUtils.lerp(mouthObj.scale.y, 0.28, dt * 16);
+            mouthObj.scale.x = THREE.MathUtils.lerp(mouthObj.scale.x, 1.0, dt * 16);
+          }
+          if (headObj) {
+            headObj.rotation.x = THREE.MathUtils.lerp(headObj.rotation.x, 0, dt * 10);
+            headObj.rotation.z = THREE.MathUtils.lerp(headObj.rotation.z, 0, dt * 10);
+          }
+          if (leftBrowObj && rightBrowObj) {
+            leftBrowObj.position.y = THREE.MathUtils.lerp(leftBrowObj.position.y, 2.13, dt * 10);
+            rightBrowObj.position.y = THREE.MathUtils.lerp(rightBrowObj.position.y, 2.13, dt * 10);
+          }
+          if (rightArmObj && leftArmObj) {
+            rightArmObj.rotation.x = THREE.MathUtils.lerp(rightArmObj.rotation.x, 0, dt * 10);
+            leftArmObj.rotation.x = THREE.MathUtils.lerp(leftArmObj.rotation.x, 0, dt * 10);
+          }
+          if (haloObj && haloObj.visible) {
+            haloObj.visible = false;
+          }
+          npcGroup.position.y = Math.abs(Math.sin(elapsed * 1.4 + i)) * 0.04;
+        }
       }
 
       // Proximity detection for Lab Equipment & NPCs
@@ -1474,8 +1645,55 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
         </div>
       </div>
 
-      {/* Top Right Quick Teleport & Control Mode Switcher */}
-      <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1.5 max-w-[60%] sm:max-w-none pointer-events-auto">
+      {/* Top Right Quick Teleport, Audio Activation Button & Control Mode Switcher */}
+      <div className="absolute top-3 right-3 z-10 flex flex-wrap justify-end gap-1.5 max-w-[65%] sm:max-w-none pointer-events-auto">
+        <button
+          type="button"
+          onClick={async () => {
+            if (!audioSettingsState.isAudioUnlocked || audioSettingsState.isMuted) {
+              await soundManager.unlockAudioEngine(true);
+              setAudioSettingsState(soundManager.getSettings());
+              showActionFeedback(
+                'Suara Karakter 3D & Audio Android Diaktifkan untuk Seluruh Sesi!'
+              );
+              if (activeNpc) {
+                const dlg = activeNpc.dialogues[npcDialogueIndex];
+                if (dlg) {
+                  soundManager.speakCharacterDialogue({
+                    text: dialogueLang === 'id' ? dlg.id : dlg.en,
+                    characterId: activeNpc.id,
+                    characterName: activeNpc.name,
+                    lang: dialogueLang === 'id' ? 'id-ID' : 'en-US',
+                  });
+                }
+              }
+            } else {
+              soundManager.setMuted(true);
+              setAudioSettingsState(soundManager.getSettings());
+              showActionFeedback('Suara Dimatikan Sementara (Mute)');
+            }
+          }}
+          className={`px-2.5 py-1.5 rounded-lg backdrop-blur-md border text-[11px] font-mono font-bold flex items-center gap-1.5 transition shadow ${
+            !audioSettingsState.isAudioUnlocked || audioSettingsState.isMuted
+              ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-white animate-pulse'
+              : 'bg-slate-900/85 hover:bg-slate-800 text-emerald-300 border-emerald-400/50'
+          }`}
+          title="Aktifkan Suara Karakter 3D (Kompatibel Android & Desktop)"
+        >
+          {!audioSettingsState.isAudioUnlocked || audioSettingsState.isMuted ? (
+            <>
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>AKTIFKAN SUARA</span>
+            </>
+          ) : (
+            <>
+              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Suara:</span>
+              <span>ON</span>
+            </>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() =>
@@ -1843,131 +2061,188 @@ export const Hospital3DWorld: React.FC<Hospital3DWorldProps> = ({
       )}
 
       {/* Interactive NPC & 3D Patient Clinical Card Modal */}
-      {activeNpc && (
-        <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-30 max-w-2xl w-[94%] max-h-[75vh] overflow-y-auto bg-[#243b55]/95 backdrop-blur-md border border-sky-300/50 rounded-2xl p-4 sm:p-5 text-white shadow-2xl pointer-events-auto">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-amber-300 font-bold">
-                {activeNpc.role === 'patient'
-                  ? `REKAM KLINIS PASIEN 3D • ${activeNpc.patientClinicalCard?.rmNumber || ''}`
-                  : `${activeNpc.zone} • ${activeNpc.dialogues[npcDialogueIndex]?.topic}`}
-              </span>
-              <h4 className="text-base md:text-lg font-bold text-white mt-0.5">{activeNpc.name}</h4>
-              <p className="text-xs text-sky-200">{activeNpc.title}</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setDialogueLang(dialogueLang === 'id' ? 'en' : 'id')}
-                className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono text-sky-200 border border-[#4a6c94]"
-              >
-                {dialogueLang === 'id' ? 'ID → EN' : 'EN → ID'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const text =
-                    dialogueLang === 'id'
-                      ? activeNpc.dialogues[npcDialogueIndex].id
-                      : activeNpc.dialogues[npcDialogueIndex].en;
-                  soundManager.speakNpc(text, dialogueLang === 'id' ? 'id-ID' : 'en-US');
-                }}
-                className="p-1.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-200 border border-sky-400/40"
-                title="Dengarkan Suara Karakter"
-              >
-                <Volume2 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveNpc(null)}
-                className="p-1.5 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-slate-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+      {activeNpc &&
+        (() => {
+          const voiceProfile = getCharacterVoiceProfile(activeNpc.id);
+          const currentText =
+            dialogueLang === 'id'
+              ? activeNpc.dialogues[npcDialogueIndex]?.id || ''
+              : activeNpc.dialogues[npcDialogueIndex]?.en || '';
+          const activeEmotion =
+            speakingState.isSpeaking && speakingState.characterId === activeNpc.id && speakingState.emotion
+              ? speakingState.emotion
+              : detectDialogueEmotion(currentText, voiceProfile);
+          const emotionInfo = EMOTION_PROSODY_MAP[activeEmotion];
+          const isThisSpeaking =
+            speakingState.isSpeaking && speakingState.characterId === activeNpc.id;
 
-          {/* Patient Clinical & Lab Data Table when inspecting a 3D Patient */}
-          {activeNpc.patientClinicalCard && (
-            <div className="mt-3 rounded-xl bg-[#edf2f7] text-slate-800 border border-slate-300 p-3.5 space-y-2 text-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-300 font-mono">
-                <span className="font-bold text-sky-900">
-                  {activeNpc.patientClinicalCard.bedOrStation}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
-                  {activeNpc.patientClinicalCard.diagnosisSummary}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          return (
+            <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-30 max-w-2xl w-[94%] max-h-[75vh] overflow-y-auto bg-[#243b55]/95 backdrop-blur-md border border-sky-300/50 rounded-2xl p-4 sm:p-5 text-white shadow-2xl pointer-events-auto">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-mono font-bold text-[11px] uppercase text-sky-900">
-                    Anamnesis & Pemeriksaan Fisik:
-                  </p>
-                  <p className="mt-0.5 leading-relaxed">
-                    {activeNpc.patientClinicalCard.anamnesis}
-                  </p>
-                  <p className="mt-1 text-slate-700 leading-relaxed">
-                    <strong>Fisik:</strong> {activeNpc.patientClinicalCard.physicalExam}
-                  </p>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-amber-300 font-bold">
+                    {activeNpc.role === 'patient'
+                      ? `REKAM KLINIS PASIEN 3D • ${activeNpc.patientClinicalCard?.rmNumber || ''}`
+                      : `${activeNpc.zone} • ${activeNpc.dialogues[npcDialogueIndex]?.topic}`}
+                  </span>
+                  <h4 className="text-base md:text-lg font-bold text-white mt-0.5">
+                    {activeNpc.name}
+                  </h4>
+                  <p className="text-xs text-sky-200">{activeNpc.title}</p>
+
+                  {/* Character Voice Identity & Emotional Prosody Badge */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                    <span className="px-2 py-0.5 rounded bg-slate-900/75 border border-sky-400/40 text-sky-200">
+                      {voiceProfile.gender === 'female' ? 'Suara Wanita' : 'Suara Pria'} •{' '}
+                      {voiceProfile.voiceId}
+                    </span>
+                    <span
+                      className="px-2 py-0.5 rounded font-bold text-slate-950"
+                      style={{ backgroundColor: emotionInfo.badgeColor }}
+                    >
+                      Ekspresi: {activeEmotion} ({emotionInfo.labelId})
+                    </span>
+                    {isThisSpeaking && (
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        Berbicara (Lip-Sync 3D Aktif)
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="font-mono font-bold text-[11px] uppercase text-rose-900">
-                    Hasil CBC & Indeks Eritrosit (MCV/MCH/MCHC):
-                  </p>
-                  <p className="mt-0.5 font-mono text-slate-900 font-medium leading-relaxed">
-                    {activeNpc.patientClinicalCard.cbcAndIndices}
-                  </p>
-                  <p className="mt-1 text-slate-700 leading-relaxed">
-                    <strong>Apusan Darah Tepi:</strong>{' '}
-                    {activeNpc.patientClinicalCard.smearMorphology}
-                  </p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setDialogueLang(dialogueLang === 'id' ? 'en' : 'id')}
+                    className="px-2.5 py-1 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-xs font-mono text-sky-200 border border-[#4a6c94]"
+                  >
+                    {dialogueLang === 'id' ? 'ID → EN' : 'EN → ID'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await soundManager.unlockAudioEngine(false);
+                      if (isThisSpeaking) {
+                        soundManager.stopSpeaking();
+                      } else {
+                        soundManager.speakCharacterDialogue({
+                          text: currentText,
+                          characterId: activeNpc.id,
+                          characterName: activeNpc.name,
+                          lang: dialogueLang === 'id' ? 'id-ID' : 'en-US',
+                        });
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded text-xs font-mono font-bold flex items-center gap-1 border transition ${
+                      isThisSpeaking
+                        ? 'bg-amber-400 text-slate-950 border-white'
+                        : 'bg-sky-500/30 hover:bg-sky-500/50 text-sky-100 border-sky-400/50'
+                    }`}
+                    title={isThisSpeaking ? 'Hentikan Suara Karakter' : 'Putar Suara Karakter'}
+                  >
+                    {isThisSpeaking ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5" /> Stop
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5" /> Suara
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.stopSpeaking();
+                      setActiveNpc(null);
+                    }}
+                    className="p-1.5 rounded bg-[#314d6d] hover:bg-[#3c5d82] text-slate-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              <div className="pt-2 border-t border-slate-300 text-emerald-950 bg-emerald-100/60 p-2.5 rounded-lg">
-                <strong>Keputusan ATLM & Terapi Dokter:</strong>{' '}
-                {activeNpc.patientClinicalCard.atlmDecisionAndTherapy}
-              </div>
-            </div>
-          )}
 
-          <p className="mt-3 text-sm leading-relaxed text-slate-100 bg-[#1b2e43] p-3.5 rounded-xl border border-[#3a5778]">
-            “
-            {dialogueLang === 'id'
-              ? activeNpc.dialogues[npcDialogueIndex]?.id
-              : activeNpc.dialogues[npcDialogueIndex]?.en}
-            ”
-          </p>
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-slate-300 font-mono">
-              Dialog {npcDialogueIndex + 1} / {activeNpc.dialogues.length}
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setNpcDialogueIndex((prev) => (prev + 1) % activeNpc.dialogues.length)
-                }
-                className="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold"
-              >
-                Dialog Berikutnya →
-              </button>
-              {onStartQuiz && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveNpc(null);
-                    onStartQuiz();
-                  }}
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center gap-1"
-                >
-                  <Play className="w-3.5 h-3.5" /> Mulai Kuis 50 Soal A–E
-                </button>
+              {/* Patient Clinical & Lab Data Table when inspecting a 3D Patient */}
+              {activeNpc.patientClinicalCard && (
+                <div className="mt-3 rounded-xl bg-[#edf2f7] text-slate-800 border border-slate-300 p-3.5 space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-300 font-mono">
+                    <span className="font-bold text-sky-900">
+                      {activeNpc.patientClinicalCard.bedOrStation}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
+                      {activeNpc.patientClinicalCard.diagnosisSummary}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    <div>
+                      <p className="font-mono font-bold text-[11px] uppercase text-sky-900">
+                        Anamnesis & Pemeriksaan Fisik:
+                      </p>
+                      <p className="mt-0.5 leading-relaxed">
+                        {activeNpc.patientClinicalCard.anamnesis}
+                      </p>
+                      <p className="mt-1 text-slate-700 leading-relaxed">
+                        <strong>Fisik:</strong> {activeNpc.patientClinicalCard.physicalExam}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono font-bold text-[11px] uppercase text-rose-900">
+                        Hasil CBC & Indeks Eritrosit (MCV/MCH/MCHC):
+                      </p>
+                      <p className="mt-0.5 font-mono text-slate-900 font-medium leading-relaxed">
+                        {activeNpc.patientClinicalCard.cbcAndIndices}
+                      </p>
+                      <p className="mt-1 text-slate-700 leading-relaxed">
+                        <strong>Apusan Darah Tepi:</strong>{' '}
+                        {activeNpc.patientClinicalCard.smearMorphology}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-300 text-emerald-950 bg-emerald-100/60 p-2.5 rounded-lg">
+                    <strong>Keputusan ATLM & Terapi Dokter:</strong>{' '}
+                    {activeNpc.patientClinicalCard.atlmDecisionAndTherapy}
+                  </div>
+                </div>
               )}
+
+              <p className="mt-3 text-sm leading-relaxed text-slate-100 bg-[#1b2e43] p-3.5 rounded-xl border border-[#3a5778]">
+                “{currentText}”
+              </p>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-slate-300 font-mono">
+                  Dialog {npcDialogueIndex + 1} / {activeNpc.dialogues.length} •{' '}
+                  {voiceProfile.voiceStyle}
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNpcDialogueIndex((prev) => (prev + 1) % activeNpc.dialogues.length)
+                    }
+                    className="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold"
+                  >
+                    Dialog Berikutnya →
+                  </button>
+                  {onStartQuiz && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        soundManager.stopSpeaking();
+                        setActiveNpc(null);
+                        onStartQuiz();
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center gap-1"
+                    >
+                      <Play className="w-3.5 h-3.5" /> Mulai Kuis 50 Soal A–E
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* Collapsible Bottom Control Dock (Quick Access to 6 3D Patients & 10 Lab Instruments) */}
       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 w-[96%] max-w-4xl bg-[#243b55]/90 backdrop-blur-md border border-[#45678e] rounded-xl px-3.5 py-2 text-white shadow-xl pointer-events-auto">

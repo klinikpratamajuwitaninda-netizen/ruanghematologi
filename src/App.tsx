@@ -220,17 +220,29 @@ export default function App() {
   });
   const [isStudentActivated, setIsStudentActivated] = useState<boolean>(false);
 
-  // Modals for Student Activation & Lecturer Login
+  // Modals for Student Activation, Login & Account Recovery, and Lecturer Login
   const [showAuthModal, setShowAuthModal] = useState<'student' | 'lecturer' | null>(null);
-  const [studentAuthTab, setStudentAuthTab] = useState<'login' | 'activate'>('login');
+  const [studentAuthTab, setStudentAuthTab] = useState<'login' | 'activate' | 'recover'>('login');
   const [formFullName, setFormFullName] = useState<string>('');
   const [formNpm, setFormNpm] = useState<string>('');
+  const [formPassword, setFormPassword] = useState<string>('');
   const [formClass, setFormClass] = useState<string>('ATLM Reguler A - IKES Rajawali');
   const [formAccessCode, setFormAccessCode] = useState<string>('');
   const [formGender, setFormGender] = useState<'male_atlm' | 'female_atlm'>('female_atlm');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState<boolean>(false);
+  const [npmLookupInfo, setNpmLookupInfo] = useState<{
+    checkedNpm: string;
+    exists: boolean;
+    studentName?: string;
+    className?: string;
+    accountStatus?: string;
+    codeStatus?: string;
+    activatedCode?: string;
+    hasPassword?: boolean;
+    message?: string;
+  } | null>(null);
 
   // Lecturer Login Form (No hardcoded secrets in frontend)
   const [lecturerBootstrapCode, setLecturerBootstrapCode] = useState<string>('');
@@ -259,7 +271,42 @@ export default function App() {
   // Audio Settings State
   const [soundSettings, setSoundSettings] = useState(soundManager.getSettings());
 
+  const getStoredCertForNpm = (rawNpm: string): string | undefined => {
+    try {
+      const clean = String(rawNpm || '')
+        .replace(/[\s./]+/g, '')
+        .trim()
+        .toUpperCase();
+      if (!clean) return undefined;
+      const mapStr = localStorage.getItem('hw_activated_certs_v1');
+      if (!mapStr) return undefined;
+      const mapObj = JSON.parse(mapStr);
+      return mapObj[clean] || undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const saveCertForNpm = (rawNpm: string, cert?: string) => {
+    if (!rawNpm || !cert) return;
+    try {
+      const clean = String(rawNpm)
+        .replace(/[\s./]+/g, '')
+        .trim()
+        .toUpperCase();
+      const mapStr = localStorage.getItem('hw_activated_certs_v1');
+      const mapObj = mapStr ? JSON.parse(mapStr) : {};
+      mapObj[clean] = cert;
+      localStorage.setItem('hw_activated_certs_v1', JSON.stringify(mapObj));
+    } catch {
+      // Ignore storage errors
+    }
+  };
+
   const applyStudentPayload = (student: any) => {
+    if (student?.npm && student?.activationCert) {
+      saveCertForNpm(student.npm, student.activationCert);
+    }
     setStudentSession((prev) => ({
       ...prev,
       ...student,
@@ -322,6 +369,50 @@ export default function App() {
     setActiveMenu(menuId);
   };
 
+  const handleCheckStudentNpm = async (npmInput?: string) => {
+    const targetNpm = String(npmInput ?? formNpm).trim();
+    if (!targetNpm || targetNpm.length < 3) {
+      setNpmLookupInfo(null);
+      return;
+    }
+    setAuthError(null);
+    try {
+      const res = await fetch('/api/auth/student/check-npm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          npm: targetNpm,
+          activationCert: getStoredCertForNpm(targetNpm),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.exists) {
+        setNpmLookupInfo({
+          checkedNpm: data.npm || targetNpm,
+          exists: true,
+          studentName: data.studentName,
+          className: data.className,
+          accountStatus: data.accountStatus || 'Sudah Teraktivasi',
+          codeStatus: data.codeStatus || 'Sudah Digunakan',
+          activatedCode: data.activatedCode,
+          hasPassword: data.hasPassword,
+          message: data.message || 'Akun berhasil ditemukan. Silakan melanjutkan proses login.',
+        });
+      } else {
+        setNpmLookupInfo({
+          checkedNpm: targetNpm,
+          exists: false,
+          accountStatus: data.accountStatus || 'Belum Terdaftar',
+          message:
+            data.error || 'NPM belum memiliki akun. Silakan lakukan aktivasi terlebih dahulu.',
+        });
+      }
+    } catch {
+      // Ignore background check error
+    }
+  };
+
   const handleStudentActivate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAuthSubmitting) return;
@@ -331,22 +422,40 @@ export default function App() {
     soundManager.playClick();
 
     try {
+      const cleanNpmStr = String(formNpm).trim();
+      const storedCert = getStoredCertForNpm(cleanNpmStr);
       const endpoint =
-        studentAuthTab === 'login' ? '/api/student-login' : '/api/auth/student/activate';
+        studentAuthTab === 'login'
+          ? '/api/student-login'
+          : studentAuthTab === 'recover'
+          ? '/api/auth/student/recover'
+          : '/api/auth/student/activate';
+
       const payload =
         studentAuthTab === 'login'
           ? {
               mode: 'login',
-              npm: formNpm.trim(),
-              accessCode: formAccessCode.trim() || undefined,
+              npm: cleanNpmStr,
+              password: formPassword.trim() || undefined,
+              activationCert: storedCert,
+            }
+          : studentAuthTab === 'recover'
+          ? {
+              mode: 'recover',
+              npm: cleanNpmStr,
+              fullName: formFullName.trim() || undefined,
+              password: formPassword.trim() || undefined,
+              activationCert: storedCert,
             }
           : {
               mode: 'activate',
               fullName: formFullName.trim(),
-              npm: formNpm.trim(),
+              npm: cleanNpmStr,
+              password: formPassword.trim() || undefined,
               className: formClass.trim(),
               accessCode: formAccessCode.trim(),
               avatarGender: formGender,
+              activationCert: storedCert,
             };
 
       const res = await fetch(endpoint, {
@@ -358,20 +467,24 @@ export default function App() {
       const data = await res.json();
       if (!res.ok || !data.success) {
         soundManager.playWrong();
-        setAuthError(data.error || 'Gagal memproses login/aktivasi mahasiswa.');
+        setAuthError(data.error || 'Terjadi gangguan koneksi. Silakan coba kembali.');
         return;
       }
 
       soundManager.playLevelUp();
       applyStudentPayload(data.student);
       setFormAccessCode('');
-      setAuthSuccess(data.message || 'Sesi Akses Seumur Hidup Mahasiswa Aktif!');
+      setFormPassword('');
+      setNpmLookupInfo(null);
+      setAuthSuccess(
+        data.message || 'Akun berhasil ditemukan. Sesi Akses Seumur Hidup Mahasiswa Aktif!'
+      );
       setTimeout(() => {
         setShowAuthModal(null);
         setAuthSuccess(null);
       }, 650);
     } catch {
-      setAuthError('Gagal menghubungi server autentikasi.');
+      setAuthError('Terjadi gangguan koneksi. Silakan coba kembali.');
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -1789,26 +1902,48 @@ export default function App() {
         )}
 
         {/* ===================================================================
-            MENU 14: AUDIO SETTINGS (WEB AUDIO SYNTHESIZER & AMBIENT LAB BGM)
+            MENU 14: AUDIO SETTINGS (5-CHANNEL ENGINE, ANDROID UNLOCK & CHARACTER VOICE PREVIEW)
            =================================================================== */}
         {activeMenu === 'audio_settings' && (
-          <div className="max-w-xl mx-auto bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
-            <h2 className="text-xl font-bold text-slate-900">
-              Pengaturan Efek Suara & Musik Latar Laboratorium
-            </h2>
-            <p className="text-xs text-slate-600">
-              Audio menggunakan Web Audio API Synthesizer yang aktif setelah interaksi pengguna
-              pertama (mematuhi kebijakan browser modern).
-            </p>
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
-                <p className="text-sm font-bold text-slate-900">Status Suara Utama (Master Mute)</p>
-                <p className="text-xs text-slate-500">
-                  Matikan atau nyalakan seluruh efek suara kuis, tombol, dan karakter NPC.
+                <span className="text-[11px] font-mono font-bold uppercase text-sky-700">
+                  AUDIO ENGINE • ANDROID & DESKTOP COMPATIBLE
+                </span>
+                <h2 className="text-xl font-bold text-slate-900 mt-0.5">
+                  Pengaturan Audio, Musik Latar & Identitas Suara Karakter 3D
+                </h2>
+                <p className="text-xs text-slate-600 mt-1">
+                  Mengatur Master Volume, Volume Suara Karakter 3D, Volume Musik Latar, dan Volume
+                  Efek Suara secara independen. Mendukung kebijakan autoplay browser Android.
                 </p>
               </div>
               <button
+                type="button"
+                onClick={async () => {
+                  await soundManager.unlockAudioEngine(true);
+                  setSoundSettings(soundManager.getSettings());
+                }}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow-sm shrink-0"
+              >
+                <Volume2 className="w-4 h-4" />
+                AKTIFKAN SUARA (ANDROID & PC)
+              </button>
+            </div>
+
+            {/* 1. Mute / Unmute Toggle */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <p className="text-sm font-bold text-slate-900">
+                  Status Suara Utama (Mute / Unmute)
+                </p>
+                <p className="text-xs text-slate-500">
+                  Matikan atau nyalakan seluruh saluran audio aplikasi dalam satu sentuhan.
+                </p>
+              </div>
+              <button
+                type="button"
                 onClick={() => {
                   const nextMute = !soundSettings.isMuted;
                   soundManager.setMuted(nextMute);
@@ -1826,50 +1961,199 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    <Volume2 className="w-4 h-4" /> Suara Aktif
+                    <Volume2 className="w-4 h-4" /> Suara Aktif (Unmuted)
                   </>
                 )}
               </button>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase text-slate-700">
-                Volume Efek Suara (SFX): {Math.round(soundSettings.sfxVolume * 100)}%
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={soundSettings.sfxVolume}
-                onChange={(e) => {
-                  soundManager.setSfxVolume(parseFloat(e.target.value));
-                  soundManager.playClick();
-                  setSoundSettings(soundManager.getSettings());
-                }}
-                className="w-full"
-              />
+            {/* 2–5: Independent 4-Channel Volume Sliders */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl border border-slate-200 space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-800">
+                  1. Master Volume: {Math.round((soundSettings.masterVolume ?? 0.9) * 100)}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundSettings.masterVolume ?? 0.9}
+                  onChange={(e) => {
+                    soundManager.setMasterVolume(parseFloat(e.target.value));
+                    setSoundSettings(soundManager.getSettings());
+                  }}
+                  className="w-full accent-sky-600"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Mengatur batas volume keseluruhan aplikasi.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/40 space-y-2">
+                <label className="block text-xs font-bold uppercase text-sky-900">
+                  2. Character Voice Volume:{' '}
+                  {Math.round((soundSettings.voiceVolume ?? 0.95) * 100)}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundSettings.voiceVolume ?? 0.95}
+                  onChange={(e) => {
+                    soundManager.setVoiceVolume(parseFloat(e.target.value));
+                    setSoundSettings(soundManager.getSettings());
+                  }}
+                  className="w-full accent-sky-600"
+                />
+                <p className="text-[11px] text-sky-800">
+                  Khusus volume suara dialog Dosen, Dokter, Analis Lab, Perawat & 6 Pasien 3D.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl border border-slate-200 space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-800">
+                  3. Background Music Volume:{' '}
+                  {Math.round((soundSettings.bgmVolume ?? 0.22) * 100)}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundSettings.bgmVolume ?? 0.22}
+                  onChange={(e) => {
+                    soundManager.setBgmVolume(parseFloat(e.target.value));
+                    setSoundSettings(soundManager.getSettings());
+                  }}
+                  className="w-full accent-sky-600"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Volume musik ambient laboratorium (tidak mengecilkan suara karakter).
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl border border-slate-200 space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-800">
+                  4. Sound Effect Volume (SFX):{' '}
+                  {Math.round((soundSettings.sfxVolume ?? 0.65) * 100)}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundSettings.sfxVolume ?? 0.65}
+                  onChange={(e) => {
+                    soundManager.setSfxVolume(parseFloat(e.target.value));
+                    soundManager.playClick();
+                    setSoundSettings(soundManager.getSettings());
+                  }}
+                  className="w-full accent-sky-600"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Volume efek klik tombol, notifikasi jawaban kuis, dan perpindahan ruangan.
+                </p>
+              </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-wrap gap-2">
               <button
+                type="button"
                 onClick={() => {
                   soundManager.startBGM();
                   setSoundSettings(soundManager.getSettings());
                 }}
-                className="px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-semibold"
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold"
               >
                 Nyalakan Musik Ambient Lab
               </button>
               <button
+                type="button"
                 onClick={() => {
                   soundManager.stopBGM();
                   setSoundSettings(soundManager.getSettings());
                 }}
-                className="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-semibold"
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold"
               >
                 Hentikan Musik Ambient
               </button>
+              <button
+                type="button"
+                onClick={() => soundManager.stopSpeaking()}
+                className="px-4 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-semibold"
+              >
+                Hentikan Suara Karakter Saat Ini
+              </button>
+            </div>
+
+            {/* Interactive Character Voice Identity & Gender Matching Preview Deck */}
+            <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-sky-300 font-bold">
+                    CHARACTER VOICE IDENTITY & EMOTIONAL PROSODY TEST
+                  </span>
+                  <h3 className="text-sm font-bold">
+                    Uji Identitas Suara Karakter Pria & Wanita (Android & Desktop)
+                  </h3>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                {[
+                  {
+                    id: 'npc_dr_juwita',
+                    label: 'dr. Juwita Ninda Suherman, M.Kes (Dosen Wanita)',
+                    badge: 'Wanita • Encouraging',
+                    sample:
+                      'Selamat datang di Hematology World Institut Kesehatan Rajawali! Ketelitian Anda menghitung MCV, MCH, dan MCHC sangat menentukan diagnosis klinis.',
+                  },
+                  {
+                    id: 'npc_dr_hendrawan',
+                    label: 'dr. Hendrawan Pratama, Sp.PK(K) (Dokter Spesialis Pria)',
+                    badge: 'Pria Senior • Serious',
+                    sample:
+                      'Rekan ATLM, jika Anda menemukan nilai MCHC lebih dari 36 gram per desiliter, periksa apakah ada sferositosis atau artefak cold agglutinin!',
+                  },
+                  {
+                    id: 'npc_atlm_senior',
+                    label: 'Raka Aditya, S.Tr.Kes (Analis Lab Pria)',
+                    badge: 'Pria • Confident',
+                    sample:
+                      'Halo rekan ATLM! Gunakan pemeriksaan cepat Rule of Three pada sampel normositik normokromik sebelum merilis hasil laboratorium.',
+                  },
+                  {
+                    id: 'npc_patient_nadia',
+                    label: 'Nn. Nadia Putri (Pasien Wanita 24 Thn)',
+                    badge: 'Wanita Muda • Curious',
+                    sample:
+                      'Kak ATLM, hasil laboratorium saya menunjukkan Hemoglobin 8,4 gram per desiliter dan MCV 64,3 femtoliter. Apa artinya ya?',
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      soundManager.speakCharacterDialogue({
+                        text: item.sample,
+                        characterId: item.id,
+                        characterName: item.label,
+                        lang: 'id-ID',
+                      })
+                    }
+                    className="text-left p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition space-y-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-white truncate">{item.label}</span>
+                      <Volume2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    </div>
+                    <span className="inline-block px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[10px]">
+                      {item.badge}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -2024,46 +2308,64 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl text-[11px] font-semibold">
                   <button
                     type="button"
                     onClick={() => {
                       setStudentAuthTab('login');
                       setAuthError(null);
+                      setAuthSuccess(null);
                     }}
-                    className={`py-2 rounded-lg transition ${
+                    className={`py-2 px-2 rounded-lg transition ${
                       studentAuthTab === 'login'
-                        ? 'bg-white text-slate-900 shadow-sm'
+                        ? 'bg-white text-slate-900 shadow-sm font-bold'
                         : 'text-slate-600'
                     }`}
                   >
-                    Login Mahasiswa Aktif
+                    Login Mahasiswa
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setStudentAuthTab('activate');
                       setAuthError(null);
+                      setAuthSuccess(null);
                     }}
-                    className={`py-2 rounded-lg transition ${
+                    className={`py-2 px-2 rounded-lg transition ${
                       studentAuthTab === 'activate'
-                        ? 'bg-white text-slate-900 shadow-sm'
+                        ? 'bg-white text-slate-900 shadow-sm font-bold'
                         : 'text-slate-600'
                     }`}
                   >
-                    Aktivasi Pertama Kali
+                    Aktivasi Baru
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStudentAuthTab('recover');
+                      setAuthError(null);
+                      setAuthSuccess(null);
+                    }}
+                    className={`py-2 px-2 rounded-lg transition ${
+                      studentAuthTab === 'recover'
+                        ? 'bg-white text-slate-900 shadow-sm font-bold'
+                        : 'text-slate-600'
+                    }`}
+                  >
+                    Pemulihan Akun
                   </button>
                 </div>
 
                 <form onSubmit={handleStudentActivate} className="space-y-3.5 text-xs">
-                  {studentAuthTab === 'activate' && (
+                  {(studentAuthTab === 'activate' || studentAuthTab === 'recover') && (
                     <div>
                       <label className="block font-bold uppercase text-slate-700 mb-1">
-                        Nama Lengkap Mahasiswa
+                        Nama Lengkap Mahasiswa{' '}
+                        {studentAuthTab === 'recover' ? '(Opsional untuk Pembaruan)' : ''}
                       </label>
                       <input
                         type="text"
-                        required
+                        required={studentAuthTab === 'activate'}
                         value={formFullName}
                         onChange={(e) => setFormFullName(e.target.value)}
                         placeholder="Masukkan Nama Lengkap"
@@ -2073,24 +2375,97 @@ export default function App() {
                   )}
 
                   <div>
-                    <label className="block font-bold uppercase text-slate-700 mb-1">
-                      Nomor Pokok Mahasiswa (NPM)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold uppercase text-slate-700">
+                        Nomor Pokok Mahasiswa (NPM)
+                      </label>
+                      {studentAuthTab !== 'activate' && (
+                        <button
+                          type="button"
+                          onClick={() => handleCheckStudentNpm(formNpm)}
+                          className="text-[11px] font-mono font-bold text-sky-700 hover:text-sky-900 underline"
+                        >
+                          Cek Status NPM
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="text"
                       required
                       value={formNpm}
-                      onChange={(e) => setFormNpm(e.target.value)}
+                      onChange={(e) => {
+                        setFormNpm(e.target.value);
+                        if (npmLookupInfo) setNpmLookupInfo(null);
+                      }}
+                      onBlur={() => {
+                        if (studentAuthTab !== 'activate' && formNpm.trim().length >= 3) {
+                          handleCheckStudentNpm(formNpm);
+                        }
+                      }}
                       placeholder="Contoh: 24011001"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
                     />
                     {studentAuthTab === 'login' && (
                       <p className="text-[11px] text-slate-500 mt-1">
-                        Bagi mahasiswa yang sudah mengaktifkan akun sekali, cukup masukkan NPM Anda
-                        untuk masuk kembali tanpa perlu mengulang aktivasi.
+                        Mahasiswa yang sudah pernah melakukan aktivasi cukup memasukkan NPM (dan
+                        password bila telah diatur) tanpa perlu kode aktivasi baru.
                       </p>
                     )}
                   </div>
+
+                  {/* Live Account & Code Status Separation Card */}
+                  {npmLookupInfo && studentAuthTab !== 'activate' && (
+                    <div
+                      className={`p-3 rounded-xl border text-[11px] space-y-1 ${
+                        npmLookupInfo.exists
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : 'bg-amber-50 border-amber-200 text-amber-900'
+                      }`}
+                    >
+                      <p className="font-bold">{npmLookupInfo.message}</p>
+                      {npmLookupInfo.exists && (
+                        <div className="flex flex-wrap gap-1.5 pt-1 font-mono text-[10px]">
+                          <span className="px-2 py-0.5 rounded bg-emerald-200/70 text-emerald-950 font-bold">
+                            Status Akun: {npmLookupInfo.accountStatus} (Aktif)
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-sky-200/70 text-sky-950 font-bold">
+                            Status Kode ({npmLookupInfo.activatedCode}): {npmLookupInfo.codeStatus}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Password Field for Login, First-Time Activation, or Account Recovery */}
+                  <div>
+                    <label className="block font-bold uppercase text-slate-700 mb-1">
+                      {studentAuthTab === 'activate'
+                        ? 'Buat Password Login Mahasiswa (Opsional / Pengaman Akun)'
+                        : studentAuthTab === 'recover'
+                        ? 'Atur Password Baru Mahasiswa'
+                        : 'Password Mahasiswa (Kosongkan bila belum pernah mengatur password)'}
+                    </label>
+                    <input
+                      type="password"
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      placeholder={
+                        studentAuthTab === 'recover'
+                          ? 'Masukkan password baru untuk akun NPM Anda'
+                          : 'Masukkan password akun mahasiswa'
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
+                    />
+                  </div>
+
+                  {studentAuthTab === 'recover' && (
+                    <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 text-[11px] leading-relaxed">
+                      <strong>Pemulihan & Sinkronisasi Akun Lama:</strong> Jika NPM Anda sebelumnya
+                      sudah berhasil menggunakan kode aktivasi, sistem akan otomatis memulihkan
+                      relasi akun dan menyimpan password baru Anda tanpa memerlukan kode aktivasi
+                      baru.
+                    </div>
+                  )}
 
                   {studentAuthTab === 'activate' && (
                     <>
@@ -2121,7 +2496,7 @@ export default function App() {
                         />
                         <p className="text-[11px] text-slate-500 mt-1">
                           1 kode aktivasi unik hanya berlaku untuk 1 mahasiswa (NPM) dan aktif
-                          permanen seumur hidup. Kode tidak dapat digunakan oleh NPM lain.
+                          permanen seumur hidup.
                         </p>
                       </div>
 
@@ -2158,7 +2533,7 @@ export default function App() {
                   )}
 
                   {authError && (
-                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800">
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-medium">
                       {authError}
                     </div>
                   )}
@@ -2176,7 +2551,9 @@ export default function App() {
                     {isAuthSubmitting
                       ? 'Memproses Autentikasi...'
                       : studentAuthTab === 'activate'
-                      ? 'Aktifkan Kode Unik & Masuk Permanen'
+                      ? 'Aktifkan Kode Unik & Buat Akun Permanen'
+                      : studentAuthTab === 'recover'
+                      ? 'Pulihkan & Sinkronkan Akun Mahasiswa'
                       : 'Masuk dengan NPM Terdaftar'}
                   </button>
                 </form>
