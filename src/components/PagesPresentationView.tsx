@@ -1,19 +1,23 @@
 /**
  * Interactive Presentation & Pages View Component
- * Didesain khusus untuk Hematology World
+ * Didesain khusus untuk Platform HEMATOLOGY WORLD
+ * Pemegang Hak Cipta: dr. Juwita Ninda Suherman, M.Kes
+ *
  * Fitur:
- * - Slide presentasi visual premium & modern 16:9
- * - Animasi bertahap (Fade, Slide, Zoom, Staggered Points)
- * - Suara Narator Dosen berbahasa Indonesia (TTS Audio / Speech Synthesis)
- * - Musik Latar (BGM) Lembut yang otomatis meredup saat narator bicara (audio ducking)
- * - Mode Fullscreen interaktif dengan pintasan keyboard & sentuhan (Arrow / Swipe / Space / Esc)
- * - Kontrol Audio: Play, Pause, Replay, Stop, Next, Prev, Volume Narator, Volume Musik, Mute
- * - Mode Otomatis (Auto Presentation Mode) & Mode Manual
- * - 3 Tombol Utama: LIHAT SLIDE (PAGES), DOWNLOAD MATERI PDF, DOWNLOAD POWERPOINT (PPTX)
- * - Watermark & Pemberitahuan Hak Cipta terintegrasi
+ * - Dukungan 2 Kumpulan Presentasi Lengkap:
+ *   1. "Perhitungan Parameter Hematologi (24 Slide Lengkap ATLM)" berdasarkan PDF Baru:
+ *      RBC, WBC, Trombosit, HCT, Diff Count, Retikulosit, Indeks MCV/MCH/MCHC, ANC, Klasifikasi Anemia, Polisitemia, Hemostasis 4 Fase & Kaskade Koagulasi.
+ *   2. "35 Modul Pembelajaran Hematologi Lengkap" (Mencakup seluruh 47 Halaman Asli: Sel Darah, Hemopoiesis, Leukosit, Trombosit, dll.).
+ * - Pemilih Modul / Slide Dropdown agar pengguna dapat membuka slide manapun (bukan hanya sejarah).
+ * - Animasi Bertahap Halus (Fade In, Staggered Points, Zoom Visual).
+ * - Suara Narator Dosen bahasa Indonesia (Wanita: dr. Juwita Ninda Suherman, M.Kes / Pria: dr. Hendrawan Pratama, Sp.PK).
+ * - Musik Latar (BGM) Lembut dengan Audio Ducking saat narator berbicara.
+ * - Mode Layar Penuh (Fullscreen) dengan Pintasan Keyboard (Arrow / Space / Esc).
+ * - 3 Tombol Utama: LIHAT SLIDE (PAGES), DOWNLOAD MATERI PDF, DOWNLOAD POWERPOINT (PPTX).
+ * - Watermark Hak Cipta Transparan dan Bilah Hak Cipta di setiap slide.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Play,
   Pause,
@@ -36,8 +40,11 @@ import {
   User,
   Sliders,
   Eye,
+  Calculator,
+  Search,
 } from 'lucide-react';
-import { LearningModuleData } from '../data/hematologyData';
+import { HEMATOLOGY_MODULES, LearningModuleData } from '../data/hematologyData';
+import { ATLM_CALC_24_SLIDES, AtlmSlideItem } from '../data/atlmCalcSlidesData';
 import { soundManager } from '../utils/soundManager';
 import { SlideCopyrightBar, CopyrightNoticeModal } from './CopyrightProtection';
 import {
@@ -47,89 +54,130 @@ import {
 } from '../utils/exportPresentationDocuments';
 
 interface PagesPresentationViewProps {
-  module: LearningModuleData;
+  module?: LearningModuleData;
   onBack?: () => void;
   onMarkComplete?: () => void;
   isCompleted?: boolean;
 }
 
 export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
-  module,
+  module: initialModule,
   onBack,
   onMarkComplete,
   isCompleted = false,
 }) => {
-  // Construct dynamic rich slides for the selected module
-  const slidesData: SlideExportData[] = React.useMemo(() => {
-    const list: SlideExportData[] = [];
-    const total = Math.max(3, (module.detailedContent || []).length + 1);
+  // Mode Presentasi: 'atlm_calc' (24 Slide Perhitungan Baru) atau 'modules_35' (35 Modul Hematologi)
+  const [presentationSource, setPresentationSource] = useState<'atlm_calc' | 'modules_35'>('atlm_calc');
+  const [selectedModuleNumber, setSelectedModuleNumber] = useState<number>(initialModule?.moduleNumber || 1);
 
-    // Slide 1: Pengantar & Konsep Utama
+  // Active module when in 35-modules mode
+  const currentModule = useMemo(() => {
+    return HEMATOLOGY_MODULES.find((m) => m.moduleNumber === selectedModuleNumber) || HEMATOLOGY_MODULES[0];
+  }, [selectedModuleNumber]);
+
+  // Construct current slidesData based on presentation source
+  const slidesData: SlideExportData[] = useMemo(() => {
+    if (presentationSource === 'atlm_calc') {
+      return ATLM_CALC_24_SLIDES.map((item) => {
+        const bullets = [...item.bulletPoints];
+        if (item.calculationExample) {
+          bullets.push(`Contoh Hitung: ${item.calculationExample.input} -> ${item.calculationExample.result}`);
+        }
+        if (item.clinicalNotes && item.clinicalNotes.length > 0) {
+          bullets.push(`Catatan ATLM: ${item.clinicalNotes[0]}`);
+        }
+
+        const takeaways = item.referenceRanges.map((r) => `${r.label}: ${r.range}`);
+        if (item.formula) {
+          takeaways.unshift(`Rumus: ${item.formula}`);
+        }
+
+        return {
+          slideNumber: item.slideNumber,
+          totalSlides: item.totalSlides,
+          title: item.title,
+          category: item.category,
+          pdfPages: [item.slideNumber],
+          imageSrc: item.imageSrc,
+          summary: item.summary,
+          bulletPoints: bullets,
+          keyTakeaways: takeaways,
+          narrationScript: item.narrationScript,
+          formulaText: item.formula,
+        };
+      });
+    }
+
+    // Otherwise, generate slides from the selected 35 module
+    const list: SlideExportData[] = [];
+    const total = Math.max(3, (currentModule.detailedContent || []).length + 2);
+
+    // Slide 1: Pengantar
     list.push({
       slideNumber: 1,
       totalSlides: total,
-      title: `${module.title}: Pengantar & Konsep Utama`,
-      category: module.category,
-      pdfPages: module.pdfPages,
-      imageSrc: `/assets/pdf/page_${String(module.primaryImagePage).padStart(2, '0')}.jpg`,
-      summary: module.summary,
+      title: `${currentModule.title}: Pengantar & Konsep Dasar`,
+      category: currentModule.category,
+      pdfPages: currentModule.pdfPages,
+      imageSrc: `/assets/pdf/page_${String(currentModule.primaryImagePage).padStart(2, '0')}.jpg`,
+      summary: currentModule.summary,
       bulletPoints: [
-        `Kompetensi Pembelajaran: Memahami mekanisme patofisiologis & analitik ${module.title}.`,
-        `Kategori Klinis: ${module.category} pada kurikulum Teknologi Laboratorium Medik (ATLM).`,
-        `Rujukan Akademik: Modul Kuliah Anatomi & Fisiologi Sistem Hematologi Hal. ${module.pdfPages.join(', ')}.`,
+        `Kompetensi Pembelajaran: Menjelaskan fisiologi dan analisis ${currentModule.title}.`,
+        `Kategori Perkuliahan: ${currentModule.category} (Teknologi Laboratorium Medik).`,
+        `Rujukan Resmi: PDF ANFIS Darah Halaman ${currentModule.pdfPages.join(', ')}.`,
       ],
-      keyTakeaways: module.keyTakeaways.slice(0, 3),
-      narrationScript: `Selamat datang pada materi perkuliahan ${module.title}. ${module.summary}. Mari kita telaah konsep dasar serta korelasi klinisnya secara bertahap.`,
+      keyTakeaways: currentModule.keyTakeaways.slice(0, 3),
+      narrationScript: `Selamat datang pada materi ${currentModule.title}. ${currentModule.summary}. Mari kita pelajari konsep dan korelasi laboratoriumnya secara terperinci.`,
     });
 
-    // Middle Slides: Detailed Content Paragraphs
-    (module.detailedContent || []).forEach((para, idx) => {
-      const pageRef = module.pdfPages[idx % module.pdfPages.length] || module.primaryImagePage;
-      const formulaItem = module.formulas?.[idx % (module.formulas.length || 1)];
+    // Content Slides
+    (currentModule.detailedContent || []).forEach((para, idx) => {
+      const pageRef = currentModule.pdfPages[idx % currentModule.pdfPages.length] || currentModule.primaryImagePage;
+      const formulaItem = currentModule.formulas?.[idx % (currentModule.formulas.length || 1)];
 
       list.push({
         slideNumber: idx + 2,
         totalSlides: total,
-        title: `${module.title}: Bagian ${idx + 1}`,
-        category: module.category,
+        title: `${currentModule.title}: Pembahasan ${idx + 1}`,
+        category: currentModule.category,
         pdfPages: [pageRef],
         imageSrc: `/assets/pdf/page_${String(pageRef).padStart(2, '0')}.jpg`,
         summary: para,
         bulletPoints: [
-          `Observasi Laboratorium: Memastikan verifikasi kontrol mutu dan preparat mikroskopis.`,
-          `Fisiologi Seluler: Transpor metabolit, integritas membran sel, serta kinetika pembentukan.`,
-          `Implikasi Medis: Nilai abnormal menjadi indikator klinis penting pada evaluasi pasien.`,
+          'Evaluasi Analitik: Memastikan validitas kontrol mutu dan penanganan reagen.',
+          'Kinetika & Metabolisme: Dinamika fisiologis seluler dalam sirkulasi darah utuh.',
+          'Signifikansi Klinis: Indikator diagnostik untuk membedakan kondisi patologis.',
         ],
         keyTakeaways: [
-          module.keyTakeaways[idx % module.keyTakeaways.length] ||
-            'Pertahankan ketepatan interpretasi hasil laboratorium hematologi.',
-          `Halaman Rujukan: PDF ANFIS Darah Halaman ${pageRef}.`,
+          currentModule.keyTakeaways[idx % currentModule.keyTakeaways.length] ||
+            'Terapkan prosedur standar operasional (SOP) hematologi medik.',
+          `Halaman Rujukan: PDF Hal. ${pageRef}.`,
         ],
-        narrationScript: `Pada bagian ini kita mempelajari bahwa: ${para}. Perhatikan baik-baik korelasi klinis dan nilai rujukan yang ditampilkan pada slide.`,
+        narrationScript: `Pada pembahasan bagian ini: ${para}. Perhatikan baik-baik nilai normal dan korelasi analitik yang tertera.`,
         formulaText: formulaItem ? `${formulaItem.name}: ${formulaItem.formula} (${formulaItem.unit})` : undefined,
       });
     });
 
-    // Final Slide: Kesimpulan & Nilai Rujukan
+    // Final Slide: Rangkuman
     list.push({
       slideNumber: total,
       totalSlides: total,
-      title: `${module.title}: Kesimpulan & Korelasi Laboratorium`,
-      category: module.category,
-      pdfPages: module.pdfPages,
-      imageSrc: `/assets/pdf/page_${String(module.primaryImagePage).padStart(2, '0')}.jpg`,
-      summary: module.caption,
+      title: `${currentModule.title}: Rangkuman & Nilai Rujukan`,
+      category: currentModule.category,
+      pdfPages: currentModule.pdfPages,
+      imageSrc: `/assets/pdf/page_${String(currentModule.primaryImagePage).padStart(2, '0')}.jpg`,
+      summary: currentModule.caption,
       bulletPoints: [
-        'Semua parameter hematologi saling terhubung membentuk profil klinis darah yang utuh.',
-        'Korelasi antara hasil alat otomatis dan konfirmasi mikroskopik SADT adalah standar emas.',
-        'Penguasaan materi ini penting untuk interpretasi 50 Soal Kuis dan Kasus Simulasi Pasien.',
+        'Semua parameter hematologi saling mengonfirmasi profil klinis pasien.',
+        'Korelasi antara hasil alat otomatis dan verifikasi mikroskopis SADT merupakan standar emas.',
+        'Penguasaan materi ini menunjang keberhasilan ujian kompetensi ATLM.',
       ],
-      keyTakeaways: module.keyTakeaways,
-      narrationScript: `Sebagai kesimpulan materi ${module.title}: ${module.caption}. Pastikan Anda mencatat poin-poin penting ini sebelum melanjutkan ke latihan kuis.`,
+      keyTakeaways: currentModule.keyTakeaways,
+      narrationScript: `Sebagai rangkuman modul ${currentModule.title}: ${currentModule.caption}. Pastikan seluruh poin rujukan dipahami dengan saksama.`,
     });
 
     return list;
-  }, [module]);
+  }, [presentationSource, currentModule]);
 
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isPlayingNarration, setIsPlayingNarration] = useState(false);
@@ -142,18 +190,25 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
   const [isExporting, setIsExporting] = useState(false);
 
   // Staggered step animations for current slide elements
-  const [animationStep, setAnimationStep] = useState(1); // 1: Title, 2: Image/Graphic, 3: Bullets, 4: Takeaways, 5: Complete
+  const [animationStep, setAnimationStep] = useState(1);
 
   const presentationContainerRef = useRef<HTMLDivElement>(null);
   const currentSlide = slidesData[currentSlideIndex] || slidesData[0];
 
+  // Reset slide index when source or module changes
+  useEffect(() => {
+    setCurrentSlideIndex(0);
+    soundManager.stopSpeaking();
+    setIsPlayingNarration(false);
+  }, [presentationSource, selectedModuleNumber]);
+
   // Reset animation step when slide changes
   useEffect(() => {
     setAnimationStep(1);
-    const t1 = setTimeout(() => setAnimationStep(2), 220);
-    const t2 = setTimeout(() => setAnimationStep(3), 550);
-    const t3 = setTimeout(() => setAnimationStep(4), 900);
-    const t4 = setTimeout(() => setAnimationStep(5), 1300);
+    const t1 = setTimeout(() => setAnimationStep(2), 200);
+    const t2 = setTimeout(() => setAnimationStep(3), 500);
+    const t3 = setTimeout(() => setAnimationStep(4), 850);
+    const t4 = setTimeout(() => setAnimationStep(5), 1200);
 
     return () => {
       clearTimeout(t1);
@@ -168,9 +223,9 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
     if (isBgmEnabled) {
       soundManager.startBGM();
       if (isPlayingNarration) {
-        soundManager.setBgmVolume(0.15); // Duck BGM
+        soundManager.setBgmVolume(0.12);
       } else {
-        soundManager.setBgmVolume(0.5); // Normal BGM
+        soundManager.setBgmVolume(0.45);
       }
     } else {
       soundManager.stopBGM();
@@ -201,7 +256,7 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSlideIndex, isFullscreen]);
+  }, [currentSlideIndex, isFullscreen, slidesData.length]);
 
   const playSlideNarration = () => {
     soundManager.stopSpeaking();
@@ -269,7 +324,7 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
     }
   };
 
-  // Trigger Narration automatically when auto-play is enabled or when user explicitly navigates
+  // Trigger Narration automatically when auto-play is enabled
   useEffect(() => {
     if (isAutoPlayMode) {
       const timer = setTimeout(() => {
@@ -305,7 +360,28 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
   const executeDownloadPdf = async () => {
     try {
       setIsExporting(true);
-      await downloadModulePresentationPdf(module, slidesData);
+      const activeModuleMeta =
+        presentationSource === 'atlm_calc'
+          ? {
+              moduleNumber: 100,
+              title: 'Perhitungan Parameter Hematologi & Korelasi Klinis (24 Slide Lengkap ATLM)',
+              category: 'Pemeriksaan Lab & Klinis' as const,
+              pdfPages: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+              primaryImagePage: 1,
+              caption: 'Perhitungan Parameter Hematologi: RBC, WBC, PLT, HCT, Diff Count, Retikulosit, Indeks Eritrosit, ANC, Klasifikasi Anemia & Hemostasis.',
+              summary: 'Materi Lengkap Presentasi Slide Mahasiswa ATLM Berdasarkan Diktat Kuliah dr. Juwita Ninda Suherman, M.Kes.',
+              detailedContent: slidesData.map((s) => s.summary),
+              keyTakeaways: slidesData.flatMap((s) => s.keyTakeaways),
+              practiceQuestion: {
+                question: 'Berapakah faktor pengali untuk hitung eritrosit manual pada kamar hitung Improved Neubauer?',
+                options: ['100', '1.000', '10.000', '50'],
+                correctIndex: 2,
+                explanation: 'Faktor pengali eritrosit pada 5 kotak kecil tengah adalah 10.000 (Pengenceran 1:200 dibagi volume 0,02 mm³).',
+              },
+            }
+          : currentModule;
+
+      await downloadModulePresentationPdf(activeModuleMeta, slidesData);
       soundManager.playLevelUp();
     } catch (err) {
       console.error('PDF export error:', err);
@@ -317,7 +393,28 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
   const executeDownloadPptx = async () => {
     try {
       setIsExporting(true);
-      await downloadModulePresentationPptx(module, slidesData);
+      const activeModuleMeta =
+        presentationSource === 'atlm_calc'
+          ? {
+              moduleNumber: 100,
+              title: 'Perhitungan Parameter Hematologi & Korelasi Klinis (24 Slide Lengkap ATLM)',
+              category: 'Pemeriksaan Lab & Klinis' as const,
+              pdfPages: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+              primaryImagePage: 1,
+              caption: 'Perhitungan Parameter Hematologi: RBC, WBC, PLT, HCT, Diff Count, Retikulosit, Indeks Eritrosit, ANC, Klasifikasi Anemia & Hemostasis.',
+              summary: 'Materi Lengkap Presentasi Slide Mahasiswa ATLM Berdasarkan Diktat Kuliah dr. Juwita Ninda Suherman, M.Kes.',
+              detailedContent: slidesData.map((s) => s.summary),
+              keyTakeaways: slidesData.flatMap((s) => s.keyTakeaways),
+              practiceQuestion: {
+                question: 'Berapakah faktor pengali untuk hitung leukosit manual pada kamar hitung Improved Neubauer?',
+                options: ['10', '50', '200', '10.000'],
+                correctIndex: 1,
+                explanation: 'Faktor pengali leukosit pada 4 kotak sudut adalah 50 (Pengenceran 1:20 dibagi volume 0,4 mm³).',
+              },
+            }
+          : currentModule;
+
+      await downloadModulePresentationPptx(activeModuleMeta, slidesData);
       soundManager.playLevelUp();
     } catch (err) {
       console.error('PPTX export error:', err);
@@ -339,29 +436,117 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 3 Main Action Panels: LIHAT SLIDE (PAGES), DOWNLOAD PDF, DOWNLOAD POWERPOINT */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 md:p-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center shrink-0">
-            <Presentation className="w-6 h-6" />
-          </div>
+      {/* Presentation Switcher: 24 Slide Perhitungan Baru vs 35 Modul Lengkap */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-xl flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <img
+            src="/assets/ikes_rajawali_logo.png"
+            alt="Logo IKES Rajawali"
+            className="w-12 h-12 rounded-full bg-white p-0.5 object-contain shrink-0"
+          />
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono uppercase tracking-widest text-sky-700 font-bold">
-                PLATFORM PRESENTASI DIGITAL • MODUL #{module.moduleNumber}
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-sky-400">
+                PAGES DIGITAL PRESENTATION • DR. JUWITA NINDA SUHERMAN, M.KES
               </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-100 text-emerald-800 font-bold">
-                AKSES BEBAS TANPA LOGIN
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                AKSES TERBUKA
               </span>
             </div>
-            <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-tight">
-              {module.title}
+            <h2 className="text-xl md:text-2xl font-bold mt-0.5 leading-tight">
+              {presentationSource === 'atlm_calc'
+                ? 'Perhitungan Parameter Hematologi (24 Slide Lengkap ATLM)'
+                : `Modul #${currentModule.moduleNumber}: ${currentModule.title}`}
             </h2>
           </div>
         </div>
 
+        {/* Presentation Deck Switcher Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              soundManager.playClick();
+              setPresentationSource('atlm_calc');
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              presentationSource === 'atlm_calc'
+                ? 'bg-sky-500 text-slate-950 shadow-md'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+            }`}
+          >
+            <Calculator className="w-4 h-4" />
+            24 Slide Perhitungan ATLM (Lengkap)
+          </button>
+
+          <button
+            onClick={() => {
+              soundManager.playClick();
+              setPresentationSource('modules_35');
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              presentationSource === 'modules_35'
+                ? 'bg-sky-500 text-slate-950 shadow-md'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            35 Modul Hematologi
+          </button>
+        </div>
+      </div>
+
+      {/* Module Selector Dropdown if in 35-Modules mode */}
+      {presentationSource === 'modules_35' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
+              Pilih Modul Pembelajaran:
+            </span>
+            <select
+              value={selectedModuleNumber}
+              onChange={(e) => {
+                soundManager.playClick();
+                setSelectedModuleNumber(Number(e.target.value));
+              }}
+              className="px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              {HEMATOLOGY_MODULES.map((m) => (
+                <option key={m.moduleNumber} value={m.moduleNumber}>
+                  Modul #{m.moduleNumber}: {m.title} ({m.category})
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="text-xs text-slate-500 font-mono">
+            Total 35 Modul Lengkap (Mencakup 47 Halaman Asli PDF)
+          </span>
+        </div>
+      )}
+
+      {/* Direct Slide Jump Selector Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-700 font-mono">Lompat ke Slide:</span>
+          <select
+            value={currentSlideIndex}
+            onChange={(e) => {
+              soundManager.playClick();
+              soundManager.stopSpeaking();
+              setIsPlayingNarration(false);
+              setCurrentSlideIndex(Number(e.target.value));
+            }}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800 bg-slate-50"
+          >
+            {slidesData.map((s, idx) => (
+              <option key={idx} value={idx}>
+                Slide {s.slideNumber}: {s.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* 3 Main Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
               soundManager.playClick();
@@ -369,7 +554,7 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
                 presentationContainerRef.current.scrollIntoView({ behavior: 'smooth' });
               }
             }}
-            className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition"
+            className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
           >
             <Presentation className="w-4 h-4" />
             LIHAT SLIDE (PAGES)
@@ -378,7 +563,7 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
           <button
             onClick={handleDownloadPdfClick}
             disabled={isExporting}
-            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition"
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
           >
             <FileText className="w-4 h-4 text-rose-400" />
             {isExporting && pendingDownloadType === 'pdf' ? 'Membuat PDF...' : 'DOWNLOAD MATERI PDF'}
@@ -387,7 +572,7 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
           <button
             onClick={handleDownloadPptxClick}
             disabled={isExporting}
-            className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition"
+            className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
           >
             <Download className="w-4 h-4 text-white" />
             {isExporting && pendingDownloadType === 'pptx'
@@ -493,7 +678,7 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
           >
             <div className="flex items-center gap-2 mb-2">
               <span className="px-3 py-1 rounded-md bg-sky-500/20 text-sky-300 border border-sky-400/30 text-xs font-mono font-bold">
-                {currentSlide.category} • Hal. {currentSlide.pdfPages.join(', ')}
+                {currentSlide.category} • Slide {currentSlide.slideNumber} dari {currentSlide.totalSlides}
               </span>
               <span className="text-xs font-mono text-slate-400">
                 Institut Kesehatan Rajawali Bandung
@@ -534,8 +719,8 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
               </div>
 
               {currentSlide.formulaText && (
-                <div className="p-3.5 rounded-xl bg-sky-950/60 border border-sky-800/80 text-sky-200 font-mono text-xs">
-                  <strong className="block text-sky-300 mb-1">RUMUS KLINIS HEMATOLOGI:</strong>
+                <div className="p-3.5 rounded-xl bg-sky-950/70 border border-sky-700/80 text-sky-200 font-mono text-xs">
+                  <strong className="block text-sky-300 mb-1">RUMUS PERHITUNGAN HEMATOLOGI:</strong>
                   {currentSlide.formulaText}
                 </div>
               )}
@@ -556,13 +741,17 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
                     className="w-full h-48 md:h-56 object-contain bg-slate-950"
                   />
                   <div className="p-2.5 bg-slate-900/90 text-slate-300 font-mono text-[11px] flex items-center justify-between border-t border-slate-800">
-                    <span>Slide Asli PDF Halaman {currentSlide.pdfPages.join(', ')}</span>
+                    <span>
+                      {presentationSource === 'atlm_calc'
+                        ? `Slide Resmi ATLM #${currentSlide.slideNumber}`
+                        : `Slide Asli PDF Hal. ${currentSlide.pdfPages.join(', ')}`}
+                    </span>
                     <span className="text-sky-400 font-bold">dr. Juwita Ninda Suherman, M.Kes</span>
                   </div>
                 </div>
               )}
 
-              {/* Key Takeaways Card */}
+              {/* Key Takeaways & Reference Ranges Card */}
               <div
                 className={`p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-850 border border-slate-800 text-xs text-sky-200 font-mono space-y-1.5 transition-all duration-500 ${
                   animationStep >= 4 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
@@ -668,7 +857,7 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
           </div>
 
           {/* Right: Slide Thumbnail Dots */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1 max-w-[280px] overflow-x-auto no-scrollbar py-1">
             {slidesData.map((_, idx) => (
               <button
                 key={idx}
@@ -676,10 +865,10 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
                   soundManager.playClick();
                   setCurrentSlideIndex(idx);
                 }}
-                className={`h-2 rounded-full transition-all ${
+                className={`h-2 rounded-full transition-all shrink-0 ${
                   idx === currentSlideIndex
-                    ? 'w-6 bg-sky-400'
-                    : 'w-2 bg-slate-700 hover:bg-slate-500'
+                    ? 'w-5 bg-sky-400'
+                    : 'w-1.5 bg-slate-700 hover:bg-slate-500'
                 }`}
                 title={`Pindah ke Slide ${idx + 1}`}
               />
@@ -699,7 +888,11 @@ export const PagesPresentationView: React.FC<PagesPresentationViewProps> = ({
           setShowCopyrightWarning(false);
           setPendingDownloadType(null);
         }}
-        sourceLabel={`Modul ${module.moduleNumber}: ${module.title}`}
+        sourceLabel={
+          presentationSource === 'atlm_calc'
+            ? `Perhitungan Parameter Hematologi (24 Slide Lengkap ATLM)`
+            : `Modul ${currentModule.moduleNumber}: ${currentModule.title}`
+        }
       />
     </div>
   );
