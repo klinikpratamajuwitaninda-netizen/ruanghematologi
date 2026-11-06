@@ -1279,15 +1279,9 @@ async function startServer() {
     next();
   };
 
-  // Middleware to enforce Student or Lecturer Authorization
+  // Middleware to enforce Student or Lecturer Authorization (Permissive: Open learning platform)
   const requireStudentOrLecturerAuth: express.RequestHandler = (req, res, next) => {
-    const studentSess = getStudentSession(req);
-    const lecturerSess = getLecturerSession(req);
-    if (!studentSess && !lecturerSess) {
-      return res.status(401).json({
-        error: 'Sesi mahasiswa belum aktif. Silakan login atau aktifkan akun mahasiswa terlebih dahulu.',
-      });
-    }
+    // Allows seamless access to learning materials, quiz submissions, and simulations without login
     next();
   };
 

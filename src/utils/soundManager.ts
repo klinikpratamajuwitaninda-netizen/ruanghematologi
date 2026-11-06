@@ -780,6 +780,7 @@ class SoundManager {
     gender?: CharacterGender;
     emotion?: CharacterEmotion;
     lang?: 'id-ID' | 'en-US';
+    onComplete?: () => void;
   }): Promise<void> {
     // Always unlock AudioContext on user-initiated dialogue
     await this.unlockAudioEngine(false);
@@ -875,6 +876,13 @@ class SoundManager {
         headTiltRad: 0,
         activeClauseText: null,
       });
+      if (options.onComplete) {
+        try {
+          options.onComplete();
+        } catch {
+          // Ignore callback errors
+        }
+      }
     }
   }
 

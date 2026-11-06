@@ -20,11 +20,18 @@ import { DigitalCalculatorView } from './components/DigitalCalculatorView';
 import { ClinicalSimulationView } from './components/ClinicalSimulationView';
 import { LecturerDashboardView } from './components/LecturerDashboardView';
 import { soundManager } from './utils/soundManager';
+import { PagesPresentationView } from './components/PagesPresentationView';
+import {
+  CopyrightFooter,
+  CopyrightPolicyPage,
+  SlideCopyrightBar,
+} from './components/CopyrightProtection';
 import {
   Home,
   Compass,
   Microscope,
   BookOpen,
+  Presentation,
   Droplets,
   Stethoscope,
   Award,
@@ -33,6 +40,7 @@ import {
   Trophy,
   BarChart2,
   ShieldCheck,
+  Shield,
   UserCog,
   Volume2,
   VolumeX,
@@ -48,6 +56,8 @@ import {
   X,
   ChevronRight,
   Building2,
+  Download,
+  FileText,
 } from 'lucide-react';
 
 type StudentMenuId =
@@ -55,6 +65,7 @@ type StudentMenuId =
   | 'explore_hospital'
   | 'virtual_lab'
   | 'learning_materials'
+  | 'pages_presentation'
   | 'blood_cell_explorer'
   | 'clinical_simulation'
   | 'hematology_quiz'
@@ -64,7 +75,8 @@ type StudentMenuId =
   | 'my_score'
   | 'achievements'
   | 'avatar_settings'
-  | 'audio_settings';
+  | 'audio_settings'
+  | 'copyright_policy';
 
 interface QuizHistoryEntry {
   id: number;
@@ -106,7 +118,8 @@ const STUDENT_14_MENUS: { id: StudentMenuId; label: string; icon: React.ElementT
   { id: 'home', label: 'Home & Dashboard', icon: Home },
   { id: 'explore_hospital', label: 'Explore Hospital 3D', icon: Compass },
   { id: 'virtual_lab', label: 'Virtual Hematology Lab', icon: Microscope },
-  { id: 'learning_materials', label: 'Learning Materials (35)', icon: BookOpen },
+  { id: 'pages_presentation', label: 'Pages (Presentasi Slide & Audio)', icon: Presentation },
+  { id: 'learning_materials', label: 'Learning Materials (35 Modul)', icon: BookOpen },
   { id: 'blood_cell_explorer', label: 'Blood Cell Explorer', icon: Droplets },
   { id: 'clinical_simulation', label: 'Clinical Case Simulation', icon: Stethoscope },
   { id: 'hematology_quiz', label: 'Hematology Quiz (50 A–E)', icon: Play },
@@ -117,6 +130,7 @@ const STUDENT_14_MENUS: { id: StudentMenuId; label: string; icon: React.ElementT
   { id: 'achievements', label: 'Achievements', icon: Award },
   { id: 'avatar_settings', label: 'Avatar Settings (ATLM)', icon: UserCog },
   { id: 'audio_settings', label: 'Audio Settings', icon: Volume2 },
+  { id: 'copyright_policy', label: 'Kebijakan Hak Cipta', icon: Shield },
 ];
 
 const BLOOD_CELL_ATLAS = [
@@ -197,20 +211,20 @@ export default function App() {
   const [isLecturerLoggedIn, setIsLecturerLoggedIn] = useState<boolean>(false);
   const [lecturerName, setLecturerName] = useState<string>('dr. Juwita Ninda Suherman, M.Kes');
 
-  // Student Lifetime Session State
+  // Student Lifetime Session State (Open Access: Tidak butuh kode aktivasi / login)
   const [studentSession, setStudentSession] = useState<StudentSessionData>({
-    npm: '',
-    fullName: 'Pengunjung (Belum Login)',
-    className: 'ATLM Reguler A - IKES Rajawali',
+    npm: 'ATLM-2026',
+    fullName: 'Mahasiswa ATLM (Akses Terbuka)',
+    className: 'ATLM Reguler - IKES Rajawali',
     avatarGender: 'female_atlm',
-    xp: 100,
+    xp: 150,
     level: 1,
     highestScore: 0,
     bestAccuracy: 0,
     quizCount: 0,
-    isLifetimeActive: false,
+    isLifetimeActive: true,
     activatedWithVersion: 1,
-    activatedWithCodeDisplay: '',
+    activatedWithCodeDisplay: 'Akses Terbuka Bebas Kode Aktivasi',
     labCoatColor: '#ffffff',
     scrubColor: '#0284c7',
     hairColor: '#1e293b',
@@ -218,7 +232,7 @@ export default function App() {
     completedModules: [],
     quizHistory: [],
   });
-  const [isStudentActivated, setIsStudentActivated] = useState<boolean>(false);
+  const [isStudentActivated, setIsStudentActivated] = useState<boolean>(true);
 
   // Modals for Student Activation, Login & Account Recovery, and Lecturer Login
   const [showAuthModal, setShowAuthModal] = useState<'student' | 'lecturer' | null>(null);
@@ -359,13 +373,6 @@ export default function App() {
 
   const handleNavigateMenu = (menuId: StudentMenuId) => {
     soundManager.playNavigation();
-    if (menuId !== 'home' && menuId !== 'audio_settings' && !isStudentActivated) {
-      setAuthError(
-        'Silakan masuk menggunakan NPM aktif atau lakukan aktivasi akun mahasiswa terlebih dahulu untuk mengakses fitur pembelajaran dan kuis.'
-      );
-      setShowAuthModal('student');
-      return;
-    }
     setActiveMenu(menuId);
   };
 
@@ -681,43 +688,19 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Student Lifetime Status & Lecturer Portal Trigger */}
+          {/* Right Open Access Status & Lecturer Portal Trigger */}
           <div className="flex items-center gap-2.5">
-            {isStudentActivated ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setAuthError(null);
-                    setShowAuthModal('student');
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-mono flex items-center gap-2"
-                >
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span className="hidden sm:inline font-sans font-semibold text-white">
-                    {studentSession.fullName}
-                  </span>
-                  <span>NPM: {studentSession.npm}</span>
-                </button>
-                <button
-                  onClick={handleStudentLogout}
-                  className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white text-xs font-semibold transition"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  soundManager.playClick();
-                  setAuthError(null);
-                  setShowAuthModal('student');
-                }}
-                className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow"
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                Login / Aktivasi Mahasiswa
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-mono flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline font-sans font-semibold text-white">
+                  Akses Terbuka Mahasiswa ATLM
+                </span>
+                <span className="text-[10px] bg-emerald-950/80 px-1.5 py-0.5 rounded text-emerald-300 font-bold">
+                  Bebas Kode
+                </span>
+              </span>
+            </div>
 
             <button
               onClick={() => {
@@ -832,6 +815,15 @@ export default function App() {
                       className="px-5 py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-md transition"
                     >
                       <Play className="w-4 h-4 fill-current" /> Mulai Ujian 50 Soal A–E (ATLM)
+                    </button>
+                    <button
+                      onClick={() => {
+                        soundManager.playClick();
+                        handleNavigateMenu('pages_presentation');
+                      }}
+                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg transition"
+                    >
+                      <Presentation className="w-4 h-4" /> Buka Pages (Slide & Audio Narator)
                     </button>
                     <button
                       onClick={() => {
@@ -1280,12 +1272,23 @@ export default function App() {
                       {selectedModule.pdfPages.join(', ')}
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleMarkModuleComplete(selectedModule.moduleNumber)}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 className="w-4 h-4" /> Tandai Selesai Dipelajari (+30 XP)
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => {
+                        soundManager.playClick();
+                        setActiveMenu('pages_presentation');
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+                    >
+                      <Presentation className="w-4 h-4" /> Buka di Pages (Presentasi Slide & Audio)
+                    </button>
+                    <button
+                      onClick={() => handleMarkModuleComplete(selectedModule.moduleNumber)}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" /> Tandai Selesai (+30 XP)
+                    </button>
+                  </div>
                 </div>
 
                 {/* Summary & Detailed Paragraphs */}
@@ -1352,6 +1355,18 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ===================================================================
+            PAGES PRESENTATION VIEW: PRESENTASI SLIDE MODERN, ANIMASI & AUDIO NARATOR
+           =================================================================== */}
+        {activeMenu === 'pages_presentation' && (
+          <PagesPresentationView
+            module={selectedModule}
+            onBack={() => setActiveMenu('learning_materials')}
+            onMarkComplete={() => handleMarkModuleComplete(selectedModule.moduleNumber)}
+            isCompleted={(studentSession.completedModules || []).includes(selectedModule.moduleNumber)}
+          />
         )}
 
         {/* ===================================================================
@@ -2157,7 +2172,17 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* ===================================================================
+            MENU: COPYRIGHT & INTELLECTUAL PROPERTY POLICY
+           =================================================================== */}
+        {activeMenu === 'copyright_policy' && (
+          <CopyrightPolicyPage onBackToHome={() => setActiveMenu('home')} />
+        )}
       </main>
+
+      {/* Global Copyright Protection Footer */}
+      <CopyrightFooter />
 
       {/* =====================================================================
           ZOOMED PDF SLIDE MODAL (ALL 47 ORIGINAL PAGES)
